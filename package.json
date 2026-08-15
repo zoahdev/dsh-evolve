@@ -1,6 +1,6 @@
 {
   "name": "dsh-rule-evolve",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Verification-driven self-evolution loop for DeepSeek Harness: extract experience from failure logs, render auditable AGENTS.md rules, and verify them with real checks. Zero-dependency CLI + dsh plugin.",
   "type": "module",
   "bin": {
