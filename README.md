@@ -131,6 +131,19 @@ The health score already rewards both — so rules that are **repeatedly verifie
 and repeatedly used** survive pruning, while stale rules fade. That is
 cross-session reinforcement: the library remembers what works.
 
+## Local recall (v0.8.0)
+
+`recall` is a zero-dependency BM25-lite retrieval over the rule library —
+the retrieval half of #1881's Layer 2 without needing an embedding model:
+
+```sh
+node scripts/dsh-evolve.mjs recall --experience experience.jsonl --query "windows bash" --limit 5
+# [3.28] EXP-003 ✅ — Never rely on /bin/bash as a default shellPath on Windows…
+```
+
+Verified and frequently used rules rank higher. Works offline, no model, no
+network — and it is the seam where a real embedding provider can plug in later.
+
 One command for the whole loop:
 
 ```sh
