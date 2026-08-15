@@ -409,6 +409,7 @@ if (command === 'verify') {
   for (const entry of entries) {
     entry.verified = ok
     entry.lastVerifiedAt = new Date().toISOString()
+    if (ok) entry.verifiedCount = (entry.verifiedCount ?? 0) + 1
   }
   saveEntries(file, entries)
   console.log(`verify: exit ${result.status} — ${entries.length} entries ${ok ? 'verified ✅' : 'marked failed ❌'}`)
@@ -503,6 +504,7 @@ if (command === 'evolve') {
   for (const entry of entries) {
     entry.verified = ok
     entry.lastVerifiedAt = new Date().toISOString()
+    if (ok) entry.verifiedCount = (entry.verifiedCount ?? 0) + 1
   }
   saveEntries(file, entries)
   const rendered = renderRules(entries)
@@ -605,6 +607,7 @@ if (command === 'tool-verify') {
     for (const e of added) {
       e.verified = report.ok
       e.lastVerifiedAt = new Date().toISOString()
+      e.verifiedCount = report.ok ? 1 : 0
     }
     saveEntries(file, [...existing, ...added])
     console.log(`tool-verify: learned ${added.length} rule(s) -> ${file} (verified: ${report.ok})`)
@@ -647,6 +650,33 @@ if (command === 'merge-duplicates') {
   if (!dryRun) saveEntries(file, entries)
   console.log(`merge-duplicates ${dryRun ? '(dry-run) ' : ''}: ${merged.length} merge(s)`)
   for (const [low, high] of merged) console.log(`  ${low} -> ${high}`)
+  process.exit(0)
+}
+
+if (command === 'touch') {
+  const file = args.experience ?? 'experience.jsonl'
+  const id = args.id
+  const rule = args.rule
+  if (!id && !rule) {
+    console.error('touch: --id <rule-id> or --rule <substring> is required')
+    process.exit(1)
+  }
+  const entries = loadEntries(file)
+  const matched = entries.filter((e) =>
+    (id === undefined || e.id === id)
+    && (rule === undefined || e.rule.toLowerCase().includes(String(rule).toLowerCase()))
+  )
+  if (matched.length === 0) {
+    console.error('touch: no matching rules')
+    process.exit(1)
+  }
+  const now = new Date().toISOString()
+  for (const e of matched) {
+    e.usageCount = (e.usageCount ?? 0) + 1
+    e.lastUsedAt = now
+  }
+  saveEntries(file, entries)
+  console.log(`touch: ${matched.length} rule(s) used -> ${matched.map((e) => e.id).join(', ')}`)
   process.exit(0)
 }
 
