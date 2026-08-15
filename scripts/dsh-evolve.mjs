@@ -476,6 +476,44 @@ function toggleLang(){ zh = !zh; const t = I18N[zh ? 'zh' : 'en']; document.quer
 </html>`
 }
 
+/** Tier label + color for the evolution badge, by verified-rule count. */
+export function badgeTier(verified) {
+  if (verified >= 20) return { tier: 'legend', color: '#f4c542' }
+  if (verified >= 10) return { tier: 'growing', color: '#9b5de5' }
+  if (verified >= 5) return { tier: 'building', color: '#3ddc97' }
+  if (verified >= 1) return { tier: 'learning', color: '#4f9cf9' }
+  return { tier: 'starting', color: '#8b93b8' }
+}
+
+/**
+ * Render a README-ready SVG evolution badge (shields-style, zero deps).
+ * @param entries - rule entries.
+ * @param rounds - evolution rounds (optional; adds a rounds segment).
+ * @returns SVG markup string.
+ */
+export function renderBadge(entries, rounds = []) {
+  const total = entries.length
+  const verified = entries.filter((e) => e.verified === true).length
+  const label = 'agent rules'
+  const { color } = badgeTier(verified)
+  const value = rounds.length > 0
+    ? `${verified} verified · ${total} rules · ${rounds.length} rounds`
+    : `${verified} verified · ${total} rules`
+  const labelW = 8 + label.length * 7 + 8
+  const valueW = 8 + value.length * 7 + 8
+  const width = labelW + valueW
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="20" role="img" aria-label="${label}: ${value}">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <rect rx="3" width="${labelW}" height="20" fill="#555"/>
+  <rect x="${labelW}" rx="3" width="${valueW}" height="20" fill="${color}"/>
+  <rect width="${width}" height="20" fill="url(#s)"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="${labelW / 2}" y="14">${label}</text>
+    <text x="${labelW + valueW / 2}" y="14">${value}</text>
+  </g>
+</svg>`
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -955,6 +993,31 @@ if (command === 'dash') {
   const html = renderGrowthDashboard(entries, rounds)
   writeFileSync(out, html, 'utf8')
   console.log(`dash: agent growth report -> ${out} (${entries.length} rules, ${rounds.length} rounds)`)
+  process.exit(0)
+}
+
+if (command === 'badge') {
+  const file = args.experience ?? 'experience.jsonl'
+  const evolution = args.evolution
+  const out = args.out ?? 'badge.svg'
+  const entries = loadEntries(file)
+  const rounds = evolution && existsSync(evolution)
+    ? parseEvolutionLog(readFileSync(evolution, 'utf8'))
+    : []
+  const verified = entries.filter((e) => e.verified === true).length
+  if (args.json) {
+    console.log(JSON.stringify({
+      label: 'agent rules',
+      verified,
+      total: entries.length,
+      rounds: rounds.length,
+      ...badgeTier(verified),
+      svg: renderBadge(entries, rounds),
+    }, null, 2))
+    process.exit(0)
+  }
+  writeFileSync(out, renderBadge(entries, rounds), 'utf8')
+  console.log(`badge: evolution badge -> ${out} (${entries.length} rules, ${rounds.length} rounds)`)
   process.exit(0)
 }
 
