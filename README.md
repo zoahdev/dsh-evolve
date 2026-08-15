@@ -117,6 +117,20 @@ node scripts/dsh-evolve.mjs merge-duplicates --experience experience.jsonl [--th
 The library tells you what to keep, what to merge, and what to retire — that
 is the "memory that forgets usefully" half of long-term agent learning.
 
+## Cross-session reinforcement (v0.7.0)
+
+Rules now carry **usage and verification history**:
+
+```sh
+node scripts/dsh-evolve.mjs touch --experience experience.jsonl --id EXP-001
+```
+
+Every successful `verify`/`evolve`/`tool-verify` increments `verifiedCount`;
+every `touch` (or the plugin's `evolve_touch` tool) increments `usageCount`.
+The health score already rewards both — so rules that are **repeatedly verified
+and repeatedly used** survive pruning, while stale rules fade. That is
+cross-session reinforcement: the library remembers what works.
+
 One command for the whole loop:
 
 ```sh
