@@ -38,4 +38,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node --test test/plugin.test.mjs
       - run: pnpm pack
-      - run: node scripts/runtime-smoke.mjs ./dsh-evolve-0.4.0.tgz
+      - run: node scripts/runtime-smoke.mjs ./dsh-rule-evolve-0.4.1.tgz
