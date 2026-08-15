@@ -165,6 +165,18 @@ One command for the whole loop:
 node scripts/dsh-evolve.mjs loop --from docs/troubleshooting.md --out experience.jsonl --dir ./my-plugin
 ```
 
+## Evolution badge (v0.11.0)
+
+One command turns the rule library into a README-ready SVG badge:
+
+```sh
+dsh-evolve badge --experience experience.jsonl --evolution EVOLUTION.md --out badge.svg
+```
+
+![agent rules](https://raw.githubusercontent.com/zoahdev/dsh-rule-evolve/main/examples/badge.svg)
+
+Tiers by verified-rule count: `starting` (0) · `learning` (1-4) · `building` (5-9) · `growing` (10-19) · `legend` (20+). Add `--json` for the machine-readable summary plus the SVG payload.
+
 ## How rules get into the agent
 
 The generated block is plain AGENTS.md — drop it into your repo root or dsh
