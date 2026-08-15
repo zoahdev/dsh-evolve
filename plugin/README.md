@@ -1,4 +1,4 @@
-# dsh-evolve (plugin)
+# dsh-rule-evolve (plugin)
 
 In-session self-evolution for DeepSeek Harness. Install the plugin, and your
 agent can learn from failures and install verified rules into the profile —
@@ -7,7 +7,7 @@ without leaving the conversation.
 ## Install
 
 ```sh
-dsh plugin --profile web add github:zoahdev/dsh-evolve#path:/plugin
+dsh plugin --profile web add github:zoahdev/dsh-rule-evolve#path:/plugin
 ```
 
 ## Tools
@@ -33,7 +33,7 @@ status. Same core logic as the CLI (`dsh-evolve extract/evolve/audit`).
 验证后安装进 profile 的 AGENTS.md（自动备份），未验证的规则绝不安装。
 
 ```sh
-dsh plugin --profile web add github:zoahdev/dsh-evolve#path:/plugin
+dsh plugin --profile web add github:zoahdev/dsh-rule-evolve#path:/plugin
 ```
 
 两个工具：`evolve_learn`（失败→经验）、`evolve_apply`（验证→安装）。
