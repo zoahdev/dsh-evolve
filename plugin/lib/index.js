@@ -271,6 +271,43 @@ function createTools() {
       },
       presentCall: (args) => ({ card: 'generic', title: `Evolve recall: ${args.query ?? ''}`, kind: 'other', rawInput: args }),
     }),
+
+    defineTool({
+      name: 'evolve_report',
+      description:
+        'Summarize the profile rule library and return a shareable growth report '
+        + '(verified/total, usage, evolution rounds, and ready-to-post text). '
+        + 'Use it to show the user what their agent has learned.',
+      parameters: {
+        profile: { type: 'string', description: 'dsh profile name (default: web)' },
+        rounds: { type: 'integer', description: 'Evolution rounds to report (optional)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            total: { type: 'integer', required: true },
+            verified: { type: 'integer', required: true },
+            usage: { type: 'integer', required: true },
+            rounds: { type: 'integer', required: true },
+            shareText: { type: 'string', required: true },
+          },
+        },
+        render: (args, value) => [{ type: 'text', text: value.shareText }],
+      },
+      async execute(args) {
+        const profile = /^[A-Za-z0-9_-]+$/.test(args.profile ?? '') ? args.profile : 'web'
+        const entries = loadEntries(profileDataPath(profile))
+        const total = entries.length
+        const verified = entries.filter((e) => e.verified === true).length
+        const usage = entries.reduce((s, e) => s + (e.usageCount ?? 0), 0)
+        const rounds = typeof args.rounds === 'number' ? args.rounds : 0
+        const shareText = `🐋 My DeepSeek Harness agent learned ${total} rule(s), ${verified}/${total} verified by real checks, used ${usage} time(s)${rounds ? ` across ${rounds} evolution round(s)` : ''}. — dsh-rule-evolve`
+        return { total, verified, usage, rounds, shareText }
+      },
+      presentCall: () => ({ card: 'generic', title: 'Evolve report', kind: 'other', rawInput: {} }),
+    }),
   ]
 }
 
