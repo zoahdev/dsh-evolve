@@ -24,6 +24,33 @@ node scripts/dsh-evolve.mjs verify --experience experience.jsonl --dir ./my-plug
 `verify` runs the real check pipeline (dsh-plugin-doctor `check <dir>` by
 default, override with `--cmd`) and stamps every entry `verified: true/false`.
 
+## Self-improvement loop (v0.2.0)
+
+Full evolution with reflection, profile installation and an evolution log:
+
+```sh
+# 1. reflect on a completed task/retrospective
+node scripts/dsh-evolve.mjs reflect --task "make my plugin pass its own checks" --result retro.md --out experience.jsonl
+
+# 2. evolve: verify rules against the real repo, install them into a dsh profile,
+#    and append one round to EVOLUTION.md
+node scripts/dsh-evolve.mjs evolve --experience experience.jsonl --dir ./my-plugin --profile web --log EVOLUTION.md
+```
+
+The rules land in `<DSH_HOME>/profiles/web/AGENTS.md` (previous file backed up),
+so the next session actually starts with the lessons. Every round is logged:
+
+```markdown
+## Round 1 — 2026-08-15T…
+- New rules: 5
+- Verified: yes ✅
+- Sources: examples/doctor-experience.md
+- Command: dsh-evolve evolve --experience … --dir … --profile web
+```
+
+Dogfood: our doctor repo now passes its own check with 5 verified rules installed
+into a profile (see `examples/demo/EVOLUTION.md`).
+
 One command for the whole loop:
 
 ```sh
