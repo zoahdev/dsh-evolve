@@ -51,6 +51,30 @@ so the next session actually starts with the lessons. Every round is logged:
 Dogfood: our doctor repo now passes its own check with 5 verified rules installed
 into a profile (see `examples/demo/EVOLUTION.md`).
 
+## Learning from failure logs (v0.3.0)
+
+`extract` turns raw failure logs into conditional rules automatically — no
+manual retrospective needed:
+
+```sh
+node scripts/dsh-evolve.mjs extract --task "publish to npm" --from install.log \
+  --out experience.jsonl --hint "configure the credential and retry"
+```
+
+Every `ERROR`/`failed`/`ERR_` line becomes a rule: `When "<error>" occurs,
+<hint>.` Noise lines (progress/warnings/success) are skipped; rules are
+deduplicated and tagged.
+
+`audit` keeps the rule library healthy:
+
+```sh
+node scripts/dsh-evolve.mjs audit --experience experience.jsonl
+```
+
+It reports totals, verified/unverified counts, tag and source distribution,
+and near-duplicate rule pairs (Jaccard ≥ 0.7) so overlapping lessons can be
+merged. Dogfood: extracted 6 rules from our real npm ENEEDAUTH failure log.
+
 One command for the whole loop:
 
 ```sh
