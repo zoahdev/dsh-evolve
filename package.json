@@ -1,10 +1,11 @@
 {
-  "name": "dsh-evolve",
-  "version": "0.4.0",
-  "description": "Verification-driven self-evolution loop for DeepSeek Harness: extract experience from markdown, render auditable AGENTS.md rules, and verify them with real checks. Zero-dependency CLI.",
+  "name": "dsh-rule-evolve",
+  "version": "0.4.1",
+  "description": "Verification-driven self-evolution loop for DeepSeek Harness: extract experience from failure logs, render auditable AGENTS.md rules, and verify them with real checks. Zero-dependency CLI + dsh plugin.",
   "type": "module",
   "bin": {
-    "dsh-evolve": "./scripts/dsh-evolve.mjs"
+    "dsh-evolve": "./scripts/dsh-evolve.mjs",
+    "dsh-rule-evolve": "./scripts/dsh-evolve.mjs"
   },
   "files": [
     "scripts",
@@ -26,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zoahdev/dsh-evolve.git"
+    "url": "git+https://github.com/zoahdev/dsh-rule-evolve.git"
   },
   "engines": {
     "node": ">=18"
