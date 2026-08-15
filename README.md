@@ -144,6 +144,21 @@ node scripts/dsh-evolve.mjs recall --experience experience.jsonl --query "window
 Verified and frequently used rules rank higher. Works offline, no model, no
 network — and it is the seam where a real embedding provider can plug in later.
 
+## Agent Growth Dashboard (v0.10.0)
+
+Turn the rule library into something you can **see and share**:
+
+```sh
+node scripts/dsh-evolve.mjs dash --experience experience.jsonl --evolution EVOLUTION.md --out agent-growth.html
+```
+
+One self-contained HTML page (no dependencies, opens offline): rule growth
+curve, library health, what the agent learned, most-used rules, evolution
+timeline, and a shareable **Agent Growth Report** card. Bilingual.
+
+Live example: [examples/marathon/agent-growth.html](./examples/marathon/agent-growth.html) — the actual
+growth diary from the self-evolution marathon.
+
 One command for the whole loop:
 
 ```sh
