@@ -1,6 +1,6 @@
 {
   "name": "dsh-evolve",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Verification-driven self-evolution loop for DeepSeek Harness: extract experience from markdown, render auditable AGENTS.md rules, and verify them with real checks. Zero-dependency CLI.",
   "type": "module",
   "bin": {
