@@ -81,6 +81,16 @@ function createTools() {
         const existing = loadEntries(file)
         const seen = new Set(existing.map((e) => e.rule))
         const added = fresh.filter((e) => !seen.has(e.rule))
+        let max = 0
+        for (const e of existing) {
+          const m = /^EXP-(\d+)$/.exec(e.id)
+          if (m !== null) max = Math.max(max, Number(m[1]))
+        }
+        let n = max
+        for (const e of added) {
+          n += 1
+          e.id = `EXP-${String(n).padStart(3, '0')}`
+        }
         saveEntries(file, [...existing, ...added])
         return { added: added.length, total: existing.length + added.length, profile, file }
       },
