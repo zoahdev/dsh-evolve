@@ -82,6 +82,24 @@ It reports totals, verified/unverified counts, tag and source distribution,
 and near-duplicate rule pairs (Jaccard ≥ 0.7) so overlapping lessons can be
 merged. Dogfood: extracted 6 rules from our real npm ENEEDAUTH failure log.
 
+## Tool learning (v0.5.0)
+
+`tool-verify` is the "agent wrote a tool → is it ready?" gate:
+
+```sh
+node scripts/dsh-evolve.mjs tool-verify --dir ./my-plugin --out readiness.md \
+  --experience experience.jsonl
+```
+
+It runs the real readiness pipeline (dsh-plugin-doctor `check` by default),
+renders a readiness report (checks table, pass/warn/fail, overall READY/ISSUES),
+and **learns**: every failing/warning check becomes an experience entry
+(stamped with the verification result). A tool that ships with failures
+therefore teaches the next tool how not to ship.
+
+Dogfood: our doctor repo reports **8/8 PASS → READY ✅**; before v1.10.1 this
+same gate caught its own lint bug.
+
 One command for the whole loop:
 
 ```sh
