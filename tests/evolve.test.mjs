@@ -22,6 +22,8 @@ import {
   pruneRules,
   mergeDuplicateRules,
   recallRules,
+  parseEvolutionLog,
+  renderGrowthDashboard,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -259,4 +261,27 @@ test('merged experience keeps unique EXP ids across batches', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('parseEvolutionLog extracts rounds', () => {
+  const log = '## Round 1 — 2026-08-15T10:00:00Z\n- New rules: 5\n- Verified: yes\n\n## Round 2 — 2026-08-15T11:00:00Z\n- New rules: 6\n- Verified: no\n'
+  const rounds = parseEvolutionLog(log)
+  assert.equal(rounds.length, 2)
+  assert.equal(rounds[0].round, 1)
+  assert.equal(rounds[0].newRules, 5)
+  assert.equal(rounds[0].verified, true)
+  assert.equal(rounds[1].verified, false)
+})
+
+test('renderGrowthDashboard produces a self-contained report', () => {
+  const entries = [
+    { id: 'EXP-001', rule: 'Never rely on /bin/bash on Windows', source: 'a.md', tags: ['windows'], verified: true, usageCount: 2, addedAt: '2026-08-15T10:00:00Z' },
+    { id: 'EXP-002', rule: 'Configure NPM_TOKEN before publishing', source: 'b.log', tags: ['install'], verified: true, usageCount: 1, addedAt: '2026-08-15T11:00:00Z' },
+  ]
+  const html = renderGrowthDashboard(entries, [{ round: 1, date: '2026-08-15T10:00:00Z', newRules: 2, verified: true }])
+  assert.match(html, /Your agent/)
+  assert.match(html, /<b>2<\/b>/)
+  assert.match(html, /Round 1/)
+  assert.match(html, /windows × 1/)
+  assert.match(html, /Times rules used/)
 })
