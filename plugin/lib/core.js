@@ -172,3 +172,41 @@ export function auditRules(entries, threshold = 0.7) {
     duplicates,
   }
 }
+
+/** BM25-lite local recall over the rule library. */
+export function recallRules(entries, query, limit = 5) {
+  const q = String(query ?? '').toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+  if (q.length === 0) throw new Error('recall: query must contain words')
+  const N = entries.length
+  const df = {}
+  const tokenized = entries.map((e) => {
+    const words = e.rule.toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+    const freq = {}
+    for (const w of words) {
+      freq[w] = (freq[w] ?? 0) + 1
+    }
+    // Document frequency counts each document once per term.
+    for (const w of new Set(words)) df[w] = (df[w] ?? 0) + 1
+    return { entry: e, freq }
+  })
+  const scored = tokenized.map(({ entry, freq }) => {
+    let score = 0
+    for (const term of q) {
+      const tf = freq[term] ?? 0
+      if (tf === 0) continue
+      const idf = Math.log(1 + (N - (df[term] ?? 0) + 0.5) / ((df[term] ?? 0) + 0.5))
+      score += (tf / (tf + 1)) * idf
+    }
+    if (entry.verified === true) score += 2
+    score += (entry.usageCount ?? 0) * 0.1
+    return {
+      id: entry.id,
+      rule: entry.rule,
+      score,
+      source: entry.source,
+      verified: entry.verified === true,
+      usageCount: entry.usageCount ?? 0,
+    }
+  })
+  return scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.max(1, Math.min(limit, 50)))
+}
