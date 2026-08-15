@@ -291,6 +291,167 @@ export function recallRules(entries, query, limit = 5) {
   return scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.max(1, Math.min(limit, 50)))
 }
 
+/** Parse evolution rounds from an EVOLUTION.md log. */
+export function parseEvolutionLog(text) {
+  const rounds = []
+  let current = null
+  for (const line of text.split('\n')) {
+    const r = /^## Round (\d+) — (.+)$/.exec(line)
+    if (r !== null) {
+      current = { round: Number(r[1]), date: r[2].trim(), newRules: null, verified: null }
+      rounds.push(current)
+      continue
+    }
+    if (current === null) continue
+    const n = /^- New rules: (\d+)/.exec(line)
+    const v = /^- Verified: (yes|no)/.exec(line)
+    if (n !== null) current.newRules = Number(n[1])
+    if (v !== null) current.verified = v[1] === 'yes'
+  }
+  return rounds
+}
+
+/** Build a self-contained HTML growth dashboard from the rule library. */
+export function renderGrowthDashboard(entries, rounds) {
+  const total = entries.length
+  const verified = entries.filter((e) => e.verified === true).length
+  const usage = entries.reduce((s, e) => s + (e.usageCount ?? 0), 0)
+  const lifecycle = { active: 0, stale: 0, retired: 0, merged: 0 }
+  for (const e of entries) {
+    if (e.retired === true) lifecycle.retired += 1
+    else if (e.merged === true) lifecycle.merged += 1
+    else lifecycle[scoreRule(e) >= 3 ? 'active' : 'stale'] += 1
+  }
+  const byTag = {}
+  for (const e of entries) for (const t of e.tags ?? []) byTag[t] = (byTag[t] ?? 0) + 1
+  const topTags = Object.entries(byTag).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const topUsed = entries.filter((e) => (e.usageCount ?? 0) > 0).sort((a, b) => b.usageCount - a.usageCount).slice(0, 5)
+
+  // Growth curve: cumulative rules over time (by addedAt date).
+  const byDay = {}
+  for (const e of entries) {
+    if (!e.addedAt) continue
+    const day = e.addedAt.slice(0, 10)
+    byDay[day] = (byDay[day] ?? 0) + 1
+  }
+  const days = Object.keys(byDay).sort()
+  let cum = 0
+  const curve = days.map((d) => { cum += byDay[d]; return `${d}:${cum}` }).join('|')
+
+  const timeline = rounds.map((r) => `${r.round}|${r.date}|${r.newRules ?? '?'}|${r.verified === true ? 'yes' : r.verified === false ? 'no' : '?'}`).join(';')
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Growth Report — dsh-rule-evolve</title>
+<style>
+  :root{color-scheme:dark;--bg:#0b1020;--card:#131a30;--line:#223050;--ink:#e8ecf8;--muted:#8a94b8;--accent:#66c0f4;--green:#3ddc97;--amber:#f4c542;--red:#f26d6d;--purple:#a78bfa}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#1b2b52 0%,var(--bg) 55%);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 20px 80px}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:clamp(28px,5vw,46px);margin:0;letter-spacing:-.02em}
+  h1 em{font-style:normal;background:linear-gradient(90deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:28px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card b{display:block;font-size:34px;margin-top:4px}
+  .card span{color:var(--muted);font-size:13px}
+  .card.green b{color:var(--green)}.card.blue b{color:var(--accent)}.card.amber b{color:var(--amber)}.card.purple b{color:var(--purple)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}
+  .panel h2{margin:0 0 14px;font-size:17px}
+  .bar{height:10px;background:#223050;border-radius:6px;overflow:hidden;margin:6px 0}
+  .bar i{display:block;height:100%;border-radius:6px}
+  .row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin:8px 0}
+  .row b{color:var(--ink);min-width:130px;font-weight:600}
+  svg{width:100%;height:auto}
+  .share{margin-top:28px;background:linear-gradient(135deg,#13203f,#1b2b52);border:1px solid var(--line);border-radius:18px;padding:26px;text-align:center}
+  .share h2{margin:0 0 6px;font-size:22px}
+  .share p{color:var(--muted);margin:4px 0;font-size:14px}
+  .share .big{font-size:40px;font-weight:800;margin:12px 0;background:linear-gradient(90deg,var(--green),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{display:inline-block;background:#223050;border-radius:20px;padding:4px 12px;margin:3px;font-size:12px;color:var(--ink)}
+  .timeline{border-left:2px solid var(--line);padding-left:18px;margin-top:10px}
+  .timeline .t{position:relative;margin:14px 0;color:var(--muted);font-size:14px}
+  .timeline .t::before{content:'';position:absolute;left:-24px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--green)}
+  .timeline .t b{color:var(--ink)}
+  .toggle{background:#223050;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px}
+  @media(max-width:640px){.cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Your agent <em>grew.</em></h1><span class="sub">Agent Growth Report · dsh-rule-evolve</span><span style="flex:1"></span><button class="toggle" onclick="toggleLang()">中文</button></header>
+
+  <div class="cards">
+    <div class="card green"><span data-i18n="rules">Rules learned</span><b>${total}</b></div>
+    <div class="card blue"><span data-i18n="verified">Verified by real checks</span><b>${verified}</b></div>
+    <div class="card amber"><span data-i18n="usage">Times rules used</span><b>${usage}</b></div>
+    <div class="card purple"><span data-i18n="rounds">Evolution rounds</span><b>${rounds.length}</b></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="curve">Rule growth over time</h2>
+    <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3ddc97"/><stop offset="1" stop-color="#66c0f4"/></linearGradient></defs>
+      <polyline id="curve" fill="none" stroke="url(#g)" stroke-width="3" points=""/>
+      <text x="8" y="168" fill="#8a94b8" font-size="11">0</text>
+      <text x="560" y="168" fill="#8a94b8" font-size="11">${total}</text>
+    </svg>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="health">Rule library health</h2>
+    <div class="row"><b>Active</b><span style="flex:1"></span>${lifecycle.active}</div>
+    <div class="bar"><i style="width:${total ? Math.round(lifecycle.active / total * 100) : 0}%;background:var(--green)"></i></div>
+    <div class="row"><b data-i18n="stale">Stale / retired / merged</b><span style="flex:1"></span>${lifecycle.stale} / ${lifecycle.retired} / ${lifecycle.merged}</div>
+    <div class="bar"><i style="width:${total ? Math.round((lifecycle.stale + lifecycle.retired + lifecycle.merged) / total * 100) : 0}%;background:var(--amber)"></i></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="tags">What the agent learned about</h2>
+    <div>${topTags.map(([t, n]) => `<span class="tag">${t} × ${n}</span>`).join('') || '<span class="tag">—</span>'}</div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="used">Most-used rules</h2>
+    ${topUsed.length ? topUsed.map((e) => `<div class="row"><b>${e.id}</b><span style="flex:1"></span>${e.usageCount}× · ${e.rule.slice(0, 60)}</div>`).join('') : '<p style="color:var(--muted)">No usage recorded yet — touch rules as they are applied.</p>'}
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="timeline">Evolution timeline</h2>
+    <div class="timeline">
+      ${timeline ? timeline.split(';').map((t) => { const [r, d, n, v] = t.split('|'); return `<div class="t"><b>Round ${r}</b> · ${d} · ${n} new rule(s) · ${v === 'yes' ? '✅ verified' : v === 'no' ? '❌ failed' : '—'}</div>` }).join('') : '<div class="t">No rounds logged yet.</div>'}
+    </div>
+  </div>
+
+  <div class="share" id="shareCard">
+    <h2>🐋 Agent Growth Report</h2>
+    <p>My DeepSeek Harness agent learned <b>${total} rules</b>, all verified by real checks.</p>
+    <div class="big">${verified}/${total} verified · ${usage} uses</div>
+    <p>dsh-rule-evolve · verification-driven self-evolution</p>
+  </div>
+</div>
+<script>
+const curve = "${curve}";
+if (curve) {
+  const pts = curve.split('|').map((p, i, arr) => {
+    const [d, c] = p.split(':');
+    const x = 20 + i / Math.max(1, arr.length - 1) * 560;
+    const max = Number(arr[arr.length - 1].split(':')[1]) || 1;
+    const y = 150 - (Number(c) / max) * 130;
+    return x + ',' + y;
+  });
+  document.getElementById('curve').setAttribute('points', pts.join(' '));
+}
+const I18N = { zh: { rules:'学会的规则', verified:'经真实检查验证', usage:'规则被使用次数', rounds:'进化轮次', curve:'规则增长曲线', health:'规则库健康度', stale:'陈旧 / 已淘汰 / 已合并', tags:'agent 学到了什么', used:'最常被使用的规则', timeline:'进化时间线' }, en: { rules:'Rules learned', verified:'Verified by real checks', usage:'Times rules used', rounds:'Evolution rounds', curve:'Rule growth over time', health:'Rule library health', stale:'Stale / retired / merged', tags:'What the agent learned about', used:'Most-used rules', timeline:'Evolution timeline' } };
+let zh = false;
+function toggleLang(){ zh = !zh; const t = I18N[zh ? 'zh' : 'en']; document.querySelectorAll('[data-i18n]').forEach((el) => el.textContent = t[el.dataset.i18n] || el.textContent); document.querySelector('.toggle').textContent = zh ? 'English' : '中文'; }
+</script>
+</body>
+</html>`
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -756,6 +917,20 @@ if (command === 'recall') {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
   }
+  process.exit(0)
+}
+
+if (command === 'dash') {
+  const file = args.experience ?? 'experience.jsonl'
+  const evolution = args.evolution
+  const out = args.out ?? 'agent-growth.html'
+  const entries = loadEntries(file)
+  const rounds = evolution && existsSync(evolution)
+    ? parseEvolutionLog(readFileSync(evolution, 'utf8'))
+    : []
+  const html = renderGrowthDashboard(entries, rounds)
+  writeFileSync(out, html, 'utf8')
+  console.log(`dash: agent growth report -> ${out} (${entries.length} rules, ${rounds.length} rounds)`)
   process.exit(0)
 }
 
