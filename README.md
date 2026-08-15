@@ -100,6 +100,23 @@ therefore teaches the next tool how not to ship.
 Dogfood: our doctor repo reports **8/8 PASS → READY ✅**; before v1.10.1 this
 same gate caught its own lint bug.
 
+## Rule lifecycle (v0.6.0)
+
+Rules get a health score and the library self-maintains — no manual cleanup:
+
+```sh
+node scripts/dsh-evolve.mjs score --experience experience.jsonl        # score + lifecycle table
+node scripts/dsh-evolve.mjs prune --experience experience.jsonl --min-score 3 [--dry-run]
+node scripts/dsh-evolve.mjs merge-duplicates --experience experience.jsonl [--threshold 0.7] [--dry-run]
+```
+
+- `score`: verified count, usage count, recency → active / stale
+- `prune`: soft-retires low-score rules (`retired: true`, reason kept — auditable, never deleted)
+- `merge-duplicates`: near-duplicate pairs merge into the higher-scoring rule (`mergedInto` kept)
+
+The library tells you what to keep, what to merge, and what to retire — that
+is the "memory that forgets usefully" half of long-term agent learning.
+
 One command for the whole loop:
 
 ```sh
