@@ -173,6 +173,53 @@ function createTools() {
       },
       presentCall: (args) => ({ card: 'generic', title: `Evolve apply (${args.profile ?? 'web'})`, kind: 'other', rawInput: args }),
     }),
+
+    defineTool({
+      name: 'evolve_touch',
+      description:
+        'Record that a rule was used: increments usageCount and updates lastUsedAt. '
+        + 'Repeatedly used and re-verified rules score higher and survive pruning — '
+        + 'this is how the rule library "remembers what works".',
+      parameters: {
+        profile: { type: 'string', description: 'dsh profile name (default: web)' },
+        id: { type: 'string', description: 'Rule id to touch (e.g. EXP-001)' },
+        rule: { type: 'string', description: 'Substring match on the rule text' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            matched: { type: 'integer', required: true },
+            updated: { type: 'integer', required: true },
+            profile: { type: 'string', required: true },
+          },
+        },
+        render: (args, value) => [{
+          type: 'text',
+          text: `Touched ${value.updated} rule(s) in profile ${value.profile}`,
+        }],
+      },
+      async execute(args) {
+        const profile = /^[A-Za-z0-9_-]+$/.test(args.profile ?? '') ? args.profile : 'web'
+        const file = profileDataPath(profile)
+        const entries = loadEntries(file)
+        const id = args.id
+        const rule = args.rule
+        const matched = entries.filter((e) =>
+          (id === undefined || e.id === id)
+          && (rule === undefined || e.rule.toLowerCase().includes(String(rule).toLowerCase()))
+        )
+        const now = new Date().toISOString()
+        for (const e of matched) {
+          e.usageCount = (e.usageCount ?? 0) + 1
+          e.lastUsedAt = now
+        }
+        if (matched.length > 0) saveEntries(file, entries)
+        return { matched: matched.length, updated: matched.length, profile }
+      },
+      presentCall: (args) => ({ card: 'generic', title: `Evolve touch (${args.profile ?? 'web'})`, kind: 'other', rawInput: args }),
+    }),
   ]
 }
 
