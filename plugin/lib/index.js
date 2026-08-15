@@ -1,5 +1,5 @@
 /**
- * dsh-evolve plugin — in-session self-evolution for DeepSeek Harness.
+ * dsh-rule-evolve plugin — in-session self-evolution for DeepSeek Harness.
  *
  * Tools:
  *   evolve_learn   extract lessons from a failure log or a retrospective and
@@ -24,7 +24,7 @@ import {
   profileDataPath,
 } from './core.js'
 
-export const name = 'dsh-evolve'
+export const name = 'dsh-rule-evolve'
 
 export const inject = ['tools']
 
