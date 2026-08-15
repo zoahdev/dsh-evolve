@@ -256,6 +256,40 @@ export function mergeDuplicateRules(entries, threshold = 0.7, dryRun = false) {
   return merged
 }
 
+/**
+ * BM25-lite local recall over the rule library (zero dependencies; aligns
+ * with the retrieval half of RFC #1881's Layer 2 without an embedding model).
+ * Verified and frequently used rules get a small score bonus.
+ */
+export function recallRules(entries, query, limit = 5) {
+  const q = String(query ?? '').toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+  if (q.length === 0) throw new Error('recall: query must contain words')
+  const N = entries.length
+  const df = {}
+  const tokenized = entries.map((e) => {
+    const words = e.rule.toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+    const freq = {}
+    for (const w of words) {
+      freq[w] = (freq[w] ?? 0) + 1
+      df[w] = (df[w] ?? 0) + 1
+    }
+    return { entry: e, freq }
+  })
+  const scored = tokenized.map(({ entry, freq }) => {
+    let score = 0
+    for (const term of q) {
+      const tf = freq[term] ?? 0
+      if (tf === 0) continue
+      const idf = Math.log(1 + (N - (df[term] ?? 0) + 0.5) / ((df[term] ?? 0) + 0.5))
+      score += (tf / (tf + 1)) * idf
+    }
+    if (entry.verified === true) score += 2
+    score += (entry.usageCount ?? 0) * 0.1
+    return { id: entry.id, rule: entry.rule, score, source: entry.source, verified: entry.verified === true, usageCount: entry.usageCount ?? 0 }
+  })
+  return scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.max(1, Math.min(limit, 50)))
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -677,6 +711,32 @@ if (command === 'touch') {
   }
   saveEntries(file, entries)
   console.log(`touch: ${matched.length} rule(s) used -> ${matched.map((e) => e.id).join(', ')}`)
+  process.exit(0)
+}
+
+if (command === 'recall') {
+  const file = args.experience ?? 'experience.jsonl'
+  const query = args.query
+  const limit = Number(args.limit ?? 5)
+  if (!query) {
+    console.error('recall: --query <text> is required')
+    process.exit(1)
+  }
+  const entries = loadEntries(file)
+  try {
+    const results = recallRules(entries, query, limit)
+    if (results.length === 0) {
+      console.log(`recall: no rules matched "${query}"`)
+      process.exit(0)
+    }
+    console.log(`recall "${query}": ${results.length} rule(s)`)
+    for (const r of results) {
+      console.log(`  [${r.score.toFixed(2)}] ${r.id} ${r.verified ? '✅' : '○'} ${r.usageCount}x — ${r.rule.slice(0, 110)}`)
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
   process.exit(0)
 }
 
