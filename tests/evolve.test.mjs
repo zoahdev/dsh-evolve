@@ -238,3 +238,25 @@ test('recallRules ranks relevant rules and rewards verified/used ones', () => {
   assert.ok(!results.some((r) => r.id === 'EXP-002'))
   assert.throws(() => recallRules(entries, 'a', 5), /query must contain words/)
 })
+
+test('merged experience keeps unique EXP ids across batches', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-ids-'))
+  try {
+    const cli = path.join(ROOT, 'scripts', 'dsh-evolve.mjs')
+    const exp = path.join(dir, 'experience.jsonl')
+    const a = path.join(dir, 'a.md')
+    const b = path.join(dir, 'b.log')
+    writeFileSync(a, '- Never run recursive listings through node_modules.\n- Always verify rules with real checks.\n')
+    writeFileSync(b, 'ERROR: first failure line\nERROR: second failure line\ninfo: progress\n')
+    const r1 = spawnSync(process.execPath, [cli, 'reflect', '--task', 't1', '--result', a, '--out', exp], { encoding: 'utf8' })
+    assert.equal(r1.status, 0, r1.stderr)
+    const r2 = spawnSync(process.execPath, [cli, 'extract', '--task', 't2', '--from', b, '--out', exp], { encoding: 'utf8' })
+    assert.equal(r2.status, 0, r2.stderr)
+    const entries = readFileSync(exp, 'utf8').trim().split('\n').map(JSON.parse)
+    const ids = entries.map((e) => e.id)
+    assert.equal(new Set(ids).size, ids.length, `duplicate ids: ${ids.join(',')}`)
+    assert.equal(entries.length, 4)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
