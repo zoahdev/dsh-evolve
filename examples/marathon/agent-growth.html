@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Growth Report — dsh-rule-evolve</title>
+<style>
+  :root{color-scheme:dark;--bg:#0b1020;--card:#131a30;--line:#223050;--ink:#e8ecf8;--muted:#8a94b8;--accent:#66c0f4;--green:#3ddc97;--amber:#f4c542;--red:#f26d6d;--purple:#a78bfa}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#1b2b52 0%,var(--bg) 55%);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 20px 80px}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:clamp(28px,5vw,46px);margin:0;letter-spacing:-.02em}
+  h1 em{font-style:normal;background:linear-gradient(90deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:28px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card b{display:block;font-size:34px;margin-top:4px}
+  .card span{color:var(--muted);font-size:13px}
+  .card.green b{color:var(--green)}.card.blue b{color:var(--accent)}.card.amber b{color:var(--amber)}.card.purple b{color:var(--purple)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}
+  .panel h2{margin:0 0 14px;font-size:17px}
+  .bar{height:10px;background:#223050;border-radius:6px;overflow:hidden;margin:6px 0}
+  .bar i{display:block;height:100%;border-radius:6px}
+  .row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin:8px 0}
+  .row b{color:var(--ink);min-width:130px;font-weight:600}
+  svg{width:100%;height:auto}
+  .share{margin-top:28px;background:linear-gradient(135deg,#13203f,#1b2b52);border:1px solid var(--line);border-radius:18px;padding:26px;text-align:center}
+  .share h2{margin:0 0 6px;font-size:22px}
+  .share p{color:var(--muted);margin:4px 0;font-size:14px}
+  .share .big{font-size:40px;font-weight:800;margin:12px 0;background:linear-gradient(90deg,var(--green),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{display:inline-block;background:#223050;border-radius:20px;padding:4px 12px;margin:3px;font-size:12px;color:var(--ink)}
+  .timeline{border-left:2px solid var(--line);padding-left:18px;margin-top:10px}
+  .timeline .t{position:relative;margin:14px 0;color:var(--muted);font-size:14px}
+  .timeline .t::before{content:'';position:absolute;left:-24px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--green)}
+  .timeline .t b{color:var(--ink)}
+  .toggle{background:#223050;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px}
+  @media(max-width:640px){.cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Your agent <em>grew.</em></h1><span class="sub">Agent Growth Report · dsh-rule-evolve</span><span style="flex:1"></span><button class="toggle" onclick="toggleLang()">中文</button></header>
+
+  <div class="cards">
+    <div class="card green"><span data-i18n="rules">Rules learned</span><b>11</b></div>
+    <div class="card blue"><span data-i18n="verified">Verified by real checks</span><b>11</b></div>
+    <div class="card amber"><span data-i18n="usage">Times rules used</span><b>1</b></div>
+    <div class="card purple"><span data-i18n="rounds">Evolution rounds</span><b>2</b></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="curve">Rule growth over time</h2>
+    <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3ddc97"/><stop offset="1" stop-color="#66c0f4"/></linearGradient></defs>
+      <polyline id="curve" fill="none" stroke="url(#g)" stroke-width="3" points=""/>
+      <text x="8" y="168" fill="#8a94b8" font-size="11">0</text>
+      <text x="560" y="168" fill="#8a94b8" font-size="11">11</text>
+    </svg>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="health">Rule library health</h2>
+    <div class="row"><b>Active</b><span style="flex:1"></span>11</div>
+    <div class="bar"><i style="width:100%;background:var(--green)"></i></div>
+    <div class="row"><b data-i18n="stale">Stale / retired / merged</b><span style="flex:1"></span>0 / 0 / 0</div>
+    <div class="bar"><i style="width:0%;background:var(--amber)"></i></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="tags">What the agent learned about</h2>
+    <div><span class="tag">crash × 8</span><span class="tag">log × 6</span><span class="tag">install × 4</span><span class="tag">general × 2</span><span class="tag">windows × 1</span><span class="tag">security × 1</span></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="used">Most-used rules</h2>
+    <div class="row"><b>EXP-001</b><span style="flex:1"></span>1× · Never ship a plugin whose tool runtime can resolve two physi</div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="timeline">Evolution timeline</h2>
+    <div class="timeline">
+      <div class="t"><b>Round 1</b> · 2026-08-15T12:24:38.078Z · 5 new rule(s) · ✅ verified</div><div class="t"><b>Round 2</b> · 2026-08-15T12:24:44.512Z · 11 new rule(s) · ✅ verified</div>
+    </div>
+  </div>
+
+  <div class="share" id="shareCard">
+    <h2>🐋 Agent Growth Report</h2>
+    <p>My DeepSeek Harness agent learned <b>11 rules</b>, all verified by real checks.</p>
+    <div class="big">11/11 verified · 1 uses</div>
+    <p>dsh-rule-evolve · verification-driven self-evolution</p>
+  </div>
+</div>
+<script>
+const curve = "2026-08-15:11";
+if (curve) {
+  const pts = curve.split('|').map((p, i, arr) => {
+    const [d, c] = p.split(':');
+    const x = 20 + i / Math.max(1, arr.length - 1) * 560;
+    const max = Number(arr[arr.length - 1].split(':')[1]) || 1;
+    const y = 150 - (Number(c) / max) * 130;
+    return x + ',' + y;
+  });
+  document.getElementById('curve').setAttribute('points', pts.join(' '));
+}
+const I18N = { zh: { rules:'学会的规则', verified:'经真实检查验证', usage:'规则被使用次数', rounds:'进化轮次', curve:'规则增长曲线', health:'规则库健康度', stale:'陈旧 / 已淘汰 / 已合并', tags:'agent 学到了什么', used:'最常被使用的规则', timeline:'进化时间线' }, en: { rules:'Rules learned', verified:'Verified by real checks', usage:'Times rules used', rounds:'Evolution rounds', curve:'Rule growth over time', health:'Rule library health', stale:'Stale / retired / merged', tags:'What the agent learned about', used:'Most-used rules', timeline:'Evolution timeline' } };
+let zh = false;
+function toggleLang(){ zh = !zh; const t = I18N[zh ? 'zh' : 'en']; document.querySelectorAll('[data-i18n]').forEach((el) => el.textContent = t[el.dataset.i18n] || el.textContent); document.querySelector('.toggle').textContent = zh ? 'English' : '中文'; }
+</script>
+</body>
+</html>
