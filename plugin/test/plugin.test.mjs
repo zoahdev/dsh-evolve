@@ -19,11 +19,11 @@ function makeCtx() {
   }
 }
 
-test('plugin registers evolve_learn and evolve_apply', () => {
+test('plugin registers evolve_learn, evolve_apply and evolve_touch', () => {
   const ctx = makeCtx()
   plugin.apply(ctx)
   const names = ctx.registered.map((t) => t.name).sort()
-  assert.deepEqual(names, ['evolve_apply', 'evolve_learn'])
+  assert.deepEqual(names, ['evolve_apply', 'evolve_learn', 'evolve_touch'])
 })
 
 test('evolve_learn extracts from a failure log into the profile store', async () => {
@@ -94,4 +94,30 @@ test('core logic is shared and healthy', () => {
   assert.equal(entries.length, 1)
   const audit = core.auditRules(entries)
   assert.equal(audit.total, 1)
+})
+
+test('evolve_touch increments usageCount', async () => {
+  const home = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-touch-'))
+  const oldHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = makeCtx()
+    plugin.apply(ctx)
+    const learn = ctx.registered.find((t) => t.name === 'evolve_learn')
+    const touch = ctx.registered.find((t) => t.name === 'evolve_touch')
+    const learned = await learn.execute({
+      task: 't',
+      experience: '- Never use recursive listings; prefer Glob.',
+      profile: 'web',
+    }, { signal: new AbortController().signal })
+    const first = await touch.execute({ profile: 'web', rule: 'recursive' }, { signal: new AbortController().signal })
+    assert.equal(first.updated, 1)
+    const entries = readFileSync(learned.file, 'utf8').trim().split('\n').map(JSON.parse)
+    assert.equal(entries[0].usageCount, 1)
+    assert.ok(entries[0].lastUsedAt)
+  } finally {
+    if (oldHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = oldHome
+    rmSync(home, { recursive: true, force: true })
+  }
 })
