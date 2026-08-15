@@ -15,6 +15,8 @@ import {
   extractFromLog,
   ruleSimilarity,
   auditRules,
+  toolReadiness,
+  renderReadiness,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -140,4 +142,51 @@ test('ruleSimilarity and auditRules flag near-duplicates', () => {
   assert.equal(report.verified, 2)
   assert.equal(report.duplicates.length, 1)
   assert.deepEqual(report.duplicates[0], ['EXP-001', 'EXP-002'])
+})
+
+test('toolReadiness parses doctor-style JSON and renders a report', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-ready-'))
+  try {
+    const script = path.join(dir, 'fake-check.mjs')
+    writeFileSync(script, `console.log(JSON.stringify({ checks: [
+      { name: 'manifest', status: 'PASS', detail: 'ok' },
+      { name: 'entry', status: 'WARN', detail: 'lib not built' },
+      { name: 'pack', status: 'FAIL', detail: 'pack failed' }
+    ] })); process.exit(1)`)
+    const cmd = `${process.execPath} ${script}`
+    const report = toolReadiness(cmd, 'my-plugin')
+    assert.equal(report.ok, false)
+    assert.equal(report.checks.length, 3)
+    const rendered = renderReadiness(report)
+    assert.match(rendered, /1 pass \/ 1 warn \/ 1 fail/)
+    assert.match(rendered, /ISSUES FOUND/)
+    assert.match(rendered, /pack failed/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('tool-verify CLI learns rules from a failing readiness report', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-tv-'))
+  try {
+    const script = path.join(dir, 'fake-check.mjs')
+    writeFileSync(script, `console.log(JSON.stringify({ checks: [
+      { name: 'pack', status: 'FAIL', detail: 'pack failed with ERR_X' }
+    ] })); process.exit(1)`)
+    const exp = path.join(dir, 'experience.jsonl')
+    const reportOut = path.join(dir, 'report.md')
+    const cli = path.join(ROOT, 'scripts', 'dsh-evolve.mjs')
+    const r = spawnSync(process.execPath, [
+      cli, 'tool-verify', '--dir', 'repo-x', '--out', reportOut, '--experience', exp,
+      '--verify-cmd', `${process.execPath} ${script}`,
+    ], { encoding: 'utf8' })
+    assert.equal(r.status, 1)
+    assert.match(readFileSync(reportOut, 'utf8'), /ISSUES FOUND/)
+    const entries = readFileSync(exp, 'utf8').trim().split('\n').map(JSON.parse)
+    assert.ok(entries.length >= 1)
+    assert.ok(entries.every((e) => e.verified === false))
+    assert.ok(entries.some((e) => e.rule.includes('ERR_X')))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
