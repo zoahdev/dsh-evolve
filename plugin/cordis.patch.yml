@@ -1,0 +1,4 @@
+# dsh bundle patch: inserts the self-evolution tools into a profile's layer stack.
+- insert:
+    - id: dsh-evolve
+      name: dsh-evolve
