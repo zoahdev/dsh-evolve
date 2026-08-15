@@ -17,6 +17,10 @@ import {
   auditRules,
   toolReadiness,
   renderReadiness,
+  scoreRule,
+  ruleLifecycle,
+  pruneRules,
+  mergeDuplicateRules,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -189,4 +193,33 @@ test('tool-verify CLI learns rules from a failing readiness report', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('rule lifecycle: scores, stale classification, soft prune and merge', () => {
+  const old = 'Never run recursive directory listings through node_modules'
+  const near = 'Never run recursive directory listings through node_modules; prefer Glob'
+  const entries = [
+    { id: 'EXP-001', rule: old, source: 'a.md', tags: ['perf'], verified: true, verifiedCount: 3, usageCount: 5, addedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() },
+    { id: 'EXP-002', rule: near, source: 'b.md', tags: ['perf'], verified: false, verifiedCount: 0, usageCount: 0, addedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() },
+    { id: 'EXP-003', rule: 'Always warm the model cache', source: 'c.md', tags: ['perf'], verified: true, verifiedCount: 1, usageCount: 0, addedAt: new Date().toISOString() },
+  ]
+  assert.ok(scoreRule(entries[0]) > scoreRule(entries[1]))
+
+  const lifecycle = ruleLifecycle(entries, 3)
+  assert.equal(lifecycle.find((e) => e.id === 'EXP-001').lifecycle, 'active')
+  assert.equal(lifecycle.find((e) => e.id === 'EXP-002').lifecycle, 'stale')
+
+  const removed = pruneRules(entries, 3, false)
+  assert.ok(removed.includes('EXP-002'))
+  assert.equal(entries.find((e) => e.id === 'EXP-002').retired, true)
+
+  const dup = [
+    { id: 'EXP-001', rule: old, source: 'a.md', tags: ['perf'], verified: true, verifiedCount: 3, usageCount: 5 },
+    { id: 'EXP-002', rule: near, source: 'b.md', tags: ['perf'], verified: false, verifiedCount: 0, usageCount: 0 },
+  ]
+  const merges = mergeDuplicateRules(dup, 0.7, false)
+  assert.equal(merges.length, 1)
+  const low = dup.find((e) => e.merged === true)
+  const high = dup.find((e) => e.id === low.mergedInto)
+  assert.equal(high.id, 'EXP-001')
 })
