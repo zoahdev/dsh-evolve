@@ -12,6 +12,9 @@ import {
   mergeRules,
   evolutionRounds,
   appendEvolutionLog,
+  extractFromLog,
+  ruleSimilarity,
+  auditRules,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -103,4 +106,38 @@ test('profileAgentsPath respects DSH_HOME', () => {
     if (old === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = old
   }
+})
+
+test('extractFromLog turns error lines into conditional rules and skips noise', () => {
+  const log = [
+    'info: resolving packages',
+    'ERROR: Cannot read properties of undefined (reading prepare)',
+    'done in 1.2s',
+    'ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED: git install blocked',
+    'warn: nothing to do',
+  ].join('\n')
+  const entries = extractFromLog(log, 'debug plugin install', 'install.log', 'check allowBuilds and re-run')
+  assert.equal(entries.length, 2)
+  assert.ok(entries.every((e) => e.rule.startsWith('When "')))
+  assert.ok(entries.some((e) => e.rule.includes('allowBuilds')))
+  assert.ok(entries.some((e) => e.source.includes('install.log:')))
+  assert.ok(entries.every((e) => e.tags.includes('log')))
+})
+
+test('ruleSimilarity and auditRules flag near-duplicates', () => {
+  const a = 'Never run recursive directory listings through node_modules'
+  const b = 'Never run recursive directory listings through node_modules; prefer Glob'
+  const c = 'Always warm up the model cache before benchmarks'
+  assert.ok(ruleSimilarity(a, b) > 0.7)
+  assert.ok(ruleSimilarity(a, c) < 0.5)
+  const entries = [
+    { id: 'EXP-001', rule: a, source: 'x.md', tags: ['perf'], verified: true },
+    { id: 'EXP-002', rule: b, source: 'y.md', tags: ['perf'], verified: false },
+    { id: 'EXP-003', rule: c, source: 'z.md', tags: ['general'], verified: true },
+  ]
+  const report = auditRules(entries)
+  assert.equal(report.total, 3)
+  assert.equal(report.verified, 2)
+  assert.equal(report.duplicates.length, 1)
+  assert.deepEqual(report.duplicates[0], ['EXP-001', 'EXP-002'])
 })
