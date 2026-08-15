@@ -284,4 +284,6 @@ test('renderGrowthDashboard produces a self-contained report', () => {
   assert.match(html, /Round 1/)
   assert.match(html, /windows × 1/)
   assert.match(html, /Times rules used/)
+  assert.match(html, /Download PNG/)
+  assert.match(html, /function downloadPng/)
 })
