@@ -1,6 +1,6 @@
 {
   "name": "dsh-rule-evolve",
-  "version": "0.4.1",
+  "version": "0.7.0",
   "description": "In-session self-evolution for DeepSeek Harness: agents extract lessons from failures, verify them, and install auditable rules into the profile's AGENTS.md.",
   "type": "module",
   "main": "lib/index.js",
