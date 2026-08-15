@@ -76,6 +76,84 @@ export function extractExperience(markdown, source) {
   return entries
 }
 
+const NOISE_RE = /^\s*(warn|info|progress|resolved|added|done|success|ok)\b|resolved \d+|added \d+|done in/i
+const ERROR_RE = /(error|failed|fatal|exception|cannot|unable|denied|not found|timeout|ENOENT|ERESOLVE|ERR_|exit code|失败|报错|错误|无法|拒绝|超时)/i
+
+/**
+ * Extract experience entries from a raw failure log: error lines become
+ * conditional rules ("when <error> occurs, <remedy>"). Honest heuristic —
+ * rules still need verification before they are trusted.
+ */
+export function extractFromLog(logText, task, source, hint = 'investigate before proceeding') {
+  const entries = []
+  const seen = new Set()
+  let n = 0
+  const lines = logText.split('\n')
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim()
+    if (line === '' || NOISE_RE.test(line) || !ERROR_RE.test(line)) continue
+    const rule = `When "${line.slice(0, 160)}" occurs, ${hint}.`
+    const key = hash(rule)
+    if (seen.has(key)) continue
+    seen.add(key)
+    n += 1
+    entries.push({
+      id: `EXP-${String(n).padStart(3, '0')}`,
+      rule,
+      source: `${source}:${i + 1}`,
+      tags: ['log', ...inferTags(line)],
+      task,
+      addedAt: new Date().toISOString(),
+      verified: null,
+      lastVerifiedAt: null,
+    })
+  }
+  return entries
+}
+
+/** Jaccard similarity between two rule strings (word bigrams). */
+export function ruleSimilarity(a, b) {
+  const grams = (s) => {
+    const words = s.toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+    const set = new Set()
+    for (let i = 0; i < words.length - 1; i += 1) set.add(`${words[i]} ${words[i + 1]}`)
+    return set
+  }
+  const ga = grams(a)
+  const gb = grams(b)
+  if (ga.size === 0 || gb.size === 0) return 0
+  let inter = 0
+  for (const g of ga) if (gb.has(g)) inter += 1
+  const union = new Set([...ga, ...gb]).size
+  return inter / union
+}
+
+/** Audit a rule library: health, tags, sources, near-duplicates. */
+export function auditRules(entries, threshold = 0.7) {
+  const byTag = {}
+  const bySource = {}
+  const duplicates = []
+  for (const e of entries) {
+    for (const tag of e.tags ?? []) byTag[tag] = (byTag[tag] ?? 0) + 1
+    bySource[e.source] = (bySource[e.source] ?? 0) + 1
+  }
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      if (ruleSimilarity(entries[i].rule, entries[j].rule) >= threshold) {
+        duplicates.push([entries[i].id, entries[j].id])
+      }
+    }
+  }
+  return {
+    total: entries.length,
+    verified: entries.filter((e) => e.verified === true).length,
+    unverified: entries.filter((e) => e.verified !== true).length,
+    byTag,
+    bySource,
+    duplicates,
+  }
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -344,6 +422,57 @@ if (command === 'evolve') {
   })
   console.log(`evolve: round ${round} — ${entries.length} rules, ${ok ? 'verified ✅' : 'verification failed ❌'} — log: ${logFile}`)
   process.exit(ok ? 0 : 1)
+}
+
+if (command === 'extract') {
+  const task = args.task ?? ''
+  const from = args.from
+  const out = args.out ?? 'experience.jsonl'
+  const hint = args.hint ?? 'investigate before proceeding'
+  if (!task || !from || !existsSync(from)) {
+    console.error('extract: --task and --from <log-file> are required')
+    process.exit(1)
+  }
+  const logText = readFileSync(from, 'utf8')
+  const fresh = extractFromLog(logText, task, from, hint)
+  const existing = loadEntries(out)
+  const seen = new Set(existing.map((e) => hash(e.rule)))
+  const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+  saveEntries(out, [...existing, ...added])
+  console.log(`extract: ${added.length} rules extracted from failure log -> ${out} (total ${existing.length + added.length})`)
+  process.exit(0)
+}
+
+if (command === 'audit') {
+  const entries = loadEntries(args.experience ?? 'experience.jsonl')
+  const report = auditRules(entries)
+  const lines = [
+    '# dsh-evolve rule library audit',
+    '',
+    `- Total rules: ${report.total}`,
+    `- Verified: ${report.verified}`,
+    `- Unverified: ${report.unverified}`,
+    '',
+    'By tag:',
+    '',
+    ...Object.entries(report.byTag).sort((a, b) => b[1] - a[1]).map(([t, c]) => `- ${t}: ${c}`),
+    '',
+    'By source:',
+    '',
+    ...Object.entries(report.bySource).sort((a, b) => b[1] - a[1]).map(([s, c]) => `- ${s}: ${c}`),
+    '',
+  ]
+  if (report.duplicates.length > 0) {
+    lines.push('Near-duplicate rule pairs (similarity >= 0.8):', '')
+    for (const [a, b] of report.duplicates) lines.push(`- ${a} ~ ${b}`)
+    lines.push('')
+  } else {
+    lines.push('No near-duplicate rule pairs.', '')
+  }
+  const rendered = lines.join('\n')
+  if (args.out) writeFileSync(args.out, `${rendered}\n`, 'utf8')
+  console.log(rendered)
+  process.exit(0)
 }
 
   console.error(`unknown command: ${command} (run 'dsh-evolve help')`)
