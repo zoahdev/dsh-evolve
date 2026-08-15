@@ -1,11 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { extractExperience, renderRules } from '../scripts/dsh-evolve.mjs'
+import {
+  extractExperience,
+  renderRules,
+  profileAgentsPath,
+  mergeRules,
+  evolutionRounds,
+  appendEvolutionLog,
+} from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -55,5 +62,45 @@ test('write/read round-trip via files', () => {
     assert.match(rules.stdout, /EXP-001/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('mergeRules replaces the previous block or appends a new one', () => {
+  const rendered = '## Self-evolution rules\n\n- [EXP-001] Never X. _(source: a.md · ○ unverified)_\n'
+  const without = mergeRules('# Repo\n\nSome text.\n', rendered)
+  assert.match(without, /## Self-evolution rules/)
+  assert.match(without, /Some text\./)
+
+  const withOld = '# Repo\n\n## Self-evolution rules\n\n- [EXP-OLD] Old rule.\n\n## Other\n'
+  const replaced = mergeRules(withOld, rendered)
+  assert.match(replaced, /EXP-001/)
+  assert.doesNotMatch(replaced, /EXP-OLD/)
+  assert.match(replaced, /## Other/)
+})
+
+test('appendEvolutionLog increments rounds', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-log-'))
+  try {
+    const log = path.join(dir, 'EVOLUTION.md')
+    assert.equal(evolutionRounds(log), 0)
+    appendEvolutionLog(log, { newRules: 2, verified: true, sources: ['a.md'], command: 'test' })
+    appendEvolutionLog(log, { newRules: 1, verified: false, sources: ['b.md'], command: 'test' })
+    assert.equal(evolutionRounds(log), 2)
+    const text = readFileSync(log, 'utf8')
+    assert.match(text, /## Round 1/)
+    assert.match(text, /## Round 2/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('profileAgentsPath respects DSH_HOME', () => {
+  const old = process.env.DSH_HOME
+  process.env.DSH_HOME = 'C:/tmp/dsh-home'
+  try {
+    assert.equal(profileAgentsPath('web'), path.join('C:/tmp/dsh-home', 'profiles', 'web', 'AGENTS.md'))
+  } finally {
+    if (old === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = old
   }
 })
