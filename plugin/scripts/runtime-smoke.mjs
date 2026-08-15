@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-evolve-0.4.0.tgz'))
+const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-rule-evolve-0.4.1.tgz'))
 if (!existsSync(tgz)) {
   console.error(`[runtime-smoke] missing tarball: ${tgz}`)
   process.exit(1)
@@ -36,15 +36,15 @@ try {
     dependencies: {
       '@deepseek-ai/cordis': '^4.0.1',
       '@deepseek-ai/dsh-tools': '0.1.0-rc.6',
-      'dsh-evolve': `file:${tgz.replaceAll('\\', '/')}`,
+      'dsh-rule-evolve': `file:${tgz.replaceAll('\\', '/')}`,
     },
   }, null, 2))
   const install = runPnpm(['install'], dir)
   if (install.status !== 0) throw new Error('pnpm install failed')
 
-  const pluginIndex = path.join(dir, 'node_modules', 'dsh-evolve', 'lib', 'index.js')
+  const pluginIndex = path.join(dir, 'node_modules', 'dsh-rule-evolve', 'lib', 'index.js')
   const plugin = await import(pathToFileURL(pluginIndex).href)
-  if (plugin.name !== 'dsh-evolve') throw new Error(`unexpected name: ${plugin.name}`)
+  if (plugin.name !== 'dsh-rule-evolve') throw new Error(`unexpected name: ${plugin.name}`)
 
   const home = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-smoke-home-'))
   process.env.DSH_HOME = home
