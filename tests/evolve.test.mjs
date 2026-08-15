@@ -21,6 +21,7 @@ import {
   ruleLifecycle,
   pruneRules,
   mergeDuplicateRules,
+  recallRules,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -222,4 +223,18 @@ test('rule lifecycle: scores, stale classification, soft prune and merge', () =>
   const low = dup.find((e) => e.merged === true)
   const high = dup.find((e) => e.id === low.mergedInto)
   assert.equal(high.id, 'EXP-001')
+})
+
+test('recallRules ranks relevant rules and rewards verified/used ones', () => {
+  const entries = [
+    { id: 'EXP-001', rule: 'Never run recursive directory listings through node_modules', source: 'a.md', verified: true, usageCount: 3 },
+    { id: 'EXP-002', rule: 'Allow build scripts for git installs via allowBuilds', source: 'b.md', verified: false, usageCount: 0 },
+    { id: 'EXP-003', rule: 'Recursive directory scans are slow; prefer Glob', source: 'c.md', verified: true, usageCount: 0 },
+  ]
+  const results = recallRules(entries, 'recursive directory listings', 5)
+  assert.ok(results.length >= 2)
+  assert.equal(results[0].id, 'EXP-001', 'verified + used relevant rule ranks first')
+  assert.ok(results.some((r) => r.id === 'EXP-003'))
+  assert.ok(!results.some((r) => r.id === 'EXP-002'))
+  assert.throws(() => recallRules(entries, 'a', 5), /query must contain words/)
 })
