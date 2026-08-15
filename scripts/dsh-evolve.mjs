@@ -383,6 +383,21 @@ function saveEntries(file, entries) {
   writeFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8')
 }
 
+/** Assign fresh EXP ids to newly added entries, continuing the max number. */
+function assignNewIds(existing, fresh) {
+  let max = 0
+  for (const e of existing) {
+    const m = /^EXP-(\d+)$/.exec(e.id)
+    if (m !== null) max = Math.max(max, Number(m[1]))
+  }
+  let n = max
+  for (const e of fresh) {
+    n += 1
+    e.id = `EXP-${String(n).padStart(3, '0')}`
+  }
+  return fresh
+}
+
 const isMain = process.argv[1] !== undefined
   && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 
@@ -491,6 +506,7 @@ if (command === 'reflect') {
   const existing = loadEntries(out)
   const seen = new Set(existing.map((e) => hash(e.rule)))
   const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+  assignNewIds(existing, added)
   saveEntries(out, [...existing, ...added])
   console.log(`reflect: ${added.length} new experience entries from reflection -> ${out} (total ${existing.length + added.length})`)
   process.exit(0)
@@ -577,6 +593,7 @@ if (command === 'extract') {
   const existing = loadEntries(out)
   const seen = new Set(existing.map((e) => hash(e.rule)))
   const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+  assignNewIds(existing, added)
   saveEntries(out, [...existing, ...added])
   console.log(`extract: ${added.length} rules extracted from failure log -> ${out} (total ${existing.length + added.length})`)
   process.exit(0)
@@ -639,6 +656,7 @@ if (command === 'tool-verify') {
     const existing = loadEntries(file)
     const seen = new Set(existing.map((e) => hash(e.rule)))
     const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+    assignNewIds(existing, added)
     for (const e of added) {
       e.verified = report.ok
       e.lastVerifiedAt = new Date().toISOString()
