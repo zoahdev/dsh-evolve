@@ -3,11 +3,10 @@
  * dsh-evolve — verification-driven self-evolution loop.
  *
  * The loop:
- *   1. learn    extract experience entries from markdown (troubleshooting
- *              docs, postmortems, AGENTS.md drafts)
- *   2. rules    render entries into an auditable AGENTS.md rules block
- *   3. verify   run real checks (dsh-plugin-doctor or any command) and stamp
- *              each entry with the last verification result
+ *   1. learn/reflect   extract experience entries from markdown
+ *   2. rules           render entries into an auditable AGENTS.md rules block
+ *   3. verify          run real checks and stamp each entry
+ *   4. evolve          verify + install rules into a dsh profile + log the round
  *
  * Rules carry their source and verification status, so "the agent evolved"
  * is always traceable and never unverified. Zero runtime dependencies.
@@ -16,7 +15,9 @@
  *   node scripts/dsh-evolve.mjs learn --from README.md --out experience.jsonl
  *   node scripts/dsh-evolve.mjs rules --experience experience.jsonl --out AGENTS.md
  *   node scripts/dsh-evolve.mjs verify --experience experience.jsonl --dir <repo> [--cmd "node lib/bin.js check DIR --json"]
- *   node scripts/dsh-evolve.mjs loop --from README.md --out experience.jsonl --dir <repo>
+ *   node scripts/dsh-evolve.mjs reflect --task "..." --result retro.md --out experience.jsonl
+ *   node scripts/dsh-evolve.mjs evolve --experience experience.jsonl --dir <repo> --profile web
+ *   node scripts/dsh-evolve.mjs install-rules --experience experience.jsonl --profile web
  */
 
 import { spawnSync } from 'node:child_process'
@@ -92,6 +93,51 @@ export function renderRules(entries) {
   return lines.join('\n')
 }
 
+/** Path of a dsh profile's AGENTS.md (respects DSH_HOME, defaults ~/.dsh). */
+export function profileAgentsPath(profile) {
+  const home = process.env.DSH_HOME ?? path.join(process.env.USERPROFILE ?? process.env.HOME ?? '.', '.dsh')
+  return path.join(home, 'profiles', profile, 'AGENTS.md')
+}
+
+/**
+ * Merge the rendered rules block into existing AGENTS.md content:
+ * replaces the previous Self-evolution rules block, or appends one.
+ */
+export function mergeRules(existing, rendered) {
+  const marker = '## Self-evolution rules'
+  const idx = existing.indexOf(marker)
+  if (idx === -1) {
+    return `${existing.replace(/\s*$/, '')}\n\n${rendered.trim()}\n`
+  }
+  const next = existing.indexOf('\n## ', idx + marker.length)
+  const block = next === -1 ? existing.slice(idx) : existing.slice(idx, next)
+  return existing.replace(block, `${rendered.trim()}\n`)
+}
+
+/** Count completed evolution rounds in a log file. */
+export function evolutionRounds(logFile) {
+  if (!existsSync(logFile)) return 0
+  return (readFileSync(logFile, 'utf8').match(/^## Round \d+/gm) ?? []).length
+}
+
+/** Append one evolution-round entry to the log. */
+export function appendEvolutionLog(logFile, entry) {
+  mkdirSync(path.dirname(path.resolve(logFile)), { recursive: true })
+  const round = evolutionRounds(logFile) + 1
+  const lines = [
+    `## Round ${round} — ${new Date().toISOString()}`,
+    '',
+    `- New rules: ${entry.newRules}`,
+    `- Verified: ${entry.verified ? 'yes ✅' : 'no ❌'}`,
+    `- Sources: ${entry.sources.join(', ')}`,
+    `- Command: \`${entry.command}\``,
+    '',
+  ]
+  const previous = existsSync(logFile) ? readFileSync(logFile, 'utf8') : ''
+  writeFileSync(logFile, `${previous.replace(/\s*$/, '')}\n\n${lines.join('\n')}`, 'utf8')
+  return round
+}
+
 function parseArgs(argv) {
   const args = { _: [] }
   for (let i = 0; i < argv.length; i += 1) {
@@ -137,7 +183,9 @@ Usage:
   dsh-evolve rules --experience <jsonl> [--out <md>]    render AGENTS.md rules block
   dsh-evolve verify --experience <jsonl> --dir <repo>   stamp entries with a real check
                       [--cmd "node lib/bin.js check DIR --json"]
-  dsh-evolve loop --from <md> --out <jsonl> [--dir <repo>]  learn -> rules -> verify
+  dsh-evolve reflect --task <text> --result <md> --out <jsonl>   reflection -> experience
+  dsh-evolve evolve --experience <jsonl> --dir <repo> [--profile P] [--log EVOLUTION.md]
+  dsh-evolve install-rules --experience <jsonl> --profile P [--dry-run]
 `)
   process.exit(0)
 }
@@ -206,6 +254,96 @@ if (command === 'loop') {
     console.log(`loop verify: exit ${result.status}`)
   }
   process.exit(0)
+}
+
+if (command === 'reflect') {
+  const task = args.task ?? ''
+  const goal = args.goal ?? ''
+  const result = args.result
+  const out = args.out ?? 'experience.jsonl'
+  if (!task || !result || !existsSync(result)) {
+    console.error('reflect: --task and --result <md-file> are required')
+    process.exit(1)
+  }
+  const text = readFileSync(result, 'utf8')
+  const fresh = extractExperience(text, result).map((e) => ({
+    ...e,
+    task,
+    goal: goal || undefined,
+    reflectedAt: new Date().toISOString(),
+  }))
+  const existing = loadEntries(out)
+  const seen = new Set(existing.map((e) => hash(e.rule)))
+  const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+  saveEntries(out, [...existing, ...added])
+  console.log(`reflect: ${added.length} new experience entries from reflection -> ${out} (total ${existing.length + added.length})`)
+  process.exit(0)
+}
+
+if (command === 'install-rules') {
+  const file = args.experience ?? 'experience.jsonl'
+  const profile = args.profile
+  if (!profile) {
+    console.error('install-rules: --profile <name> is required')
+    process.exit(1)
+  }
+  const entries = loadEntries(file)
+  const rendered = renderRules(entries)
+  const agentsPath = profileAgentsPath(profile)
+  const previous = existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : ''
+  const merged = mergeRules(previous, rendered)
+  if (args['dry-run']) {
+    console.log(merged)
+    process.exit(0)
+  }
+  mkdirSync(path.dirname(agentsPath), { recursive: true })
+  if (previous !== merged) {
+    writeFileSync(`${agentsPath}.bak-${Date.now()}`, previous)
+  }
+  writeFileSync(agentsPath, merged)
+  console.log(`install-rules: ${entries.length} rules installed into ${agentsPath}`)
+  process.exit(0)
+}
+
+if (command === 'evolve') {
+  const file = args.experience ?? 'experience.jsonl'
+  const dir = args.dir ?? '.'
+  const profile = args.profile
+  const rulesOut = args['rules-out']
+  const logFile = args.log ?? 'EVOLUTION.md'
+  const entries = loadEntries(file)
+  if (entries.length === 0) {
+    console.error('evolve: no experience entries to evolve')
+    process.exit(1)
+  }
+  const cmd = args.cmd ?? `node ${path.join(process.cwd(), '..', 'doctor', 'lib', 'bin.js')} check ${dir} --json`
+  const parts = cmd.split(/\s+/).map((t) => t.replace(/^"|"$/g, ''))
+  const result = spawnSync(parts[0], parts.slice(1), { encoding: 'utf8', timeout: 180_000 })
+  const ok = result.status === 0
+  for (const entry of entries) {
+    entry.verified = ok
+    entry.lastVerifiedAt = new Date().toISOString()
+  }
+  saveEntries(file, entries)
+  const rendered = renderRules(entries)
+  if (rulesOut) writeFileSync(rulesOut, `${rendered}\n`, 'utf8')
+  if (profile) {
+    const agentsPath = profileAgentsPath(profile)
+    const previous = existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : ''
+    const merged = mergeRules(previous, rendered)
+    mkdirSync(path.dirname(agentsPath), { recursive: true })
+    if (previous !== merged) writeFileSync(`${agentsPath}.bak-${Date.now()}`, previous)
+    writeFileSync(agentsPath, merged)
+    console.log(`evolve: rules installed into ${agentsPath}`)
+  }
+  const round = appendEvolutionLog(logFile, {
+    newRules: entries.length,
+    verified: ok,
+    sources: [...new Set(entries.map((e) => e.source))],
+    command: `dsh-evolve evolve --experience ${file} --dir ${dir}${profile ? ` --profile ${profile}` : ''}`,
+  })
+  console.log(`evolve: round ${round} — ${entries.length} rules, ${ok ? 'verified ✅' : 'verification failed ❌'} — log: ${logFile}`)
+  process.exit(ok ? 0 : 1)
 }
 
   console.error(`unknown command: ${command} (run 'dsh-evolve help')`)
