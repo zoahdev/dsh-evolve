@@ -430,10 +430,12 @@ export function renderGrowthDashboard(entries, rounds) {
     <p>My DeepSeek Harness agent learned <b>${total} rules</b>, all verified by real checks.</p>
     <div class="big">${verified}/${total} verified · ${usage} uses</div>
     <p>dsh-rule-evolve · verification-driven self-evolution</p>
+    <button class="toggle" onclick="downloadPng()">Download PNG</button>
   </div>
 </div>
 <script>
 const curve = "${curve}";
+const TOTAL = ${total}, VERIFIED = ${verified}, USAGE = ${usage}, ROUNDS = ${rounds.length};
 if (curve) {
   const pts = curve.split('|').map((p, i, arr) => {
     const [d, c] = p.split(':');
@@ -443,6 +445,28 @@ if (curve) {
     return x + ',' + y;
   });
   document.getElementById('curve').setAttribute('points', pts.join(' '));
+}
+function downloadPng(){
+  const c = document.createElement('canvas');
+  c.width = 1200; c.height = 630;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 1200, 630);
+  g.addColorStop(0, '#13203f'); g.addColorStop(1, '#1b2b52');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 1200, 630);
+  ctx.fillStyle = '#3ddc97'; ctx.fillRect(0, 0, 1200, 8);
+  ctx.fillStyle = '#e8ecf8'; ctx.font = 'bold 58px sans-serif';
+  ctx.fillText('AGENT GROWTH REPORT', 70, 120);
+  ctx.fillStyle = '#8a94b8'; ctx.font = '26px sans-serif';
+  ctx.fillText('dsh-rule-evolve · verification-driven self-evolution', 70, 170);
+  ctx.fillStyle = '#66c0f4'; ctx.font = 'bold 46px sans-serif';
+  ctx.fillText(VERIFIED + '/' + TOTAL + ' rules verified · ' + USAGE + ' uses', 70, 280);
+  ctx.fillStyle = '#223050';
+  ctx.fillRect(70, 340, 240, 100); ctx.fillRect(350, 340, 260, 100);
+  ctx.fillStyle = '#e8ecf8'; ctx.font = 'bold 34px sans-serif';
+  ctx.fillText(String(TOTAL), 100, 400); ctx.fillText(String(ROUNDS), 380, 400);
+  ctx.fillStyle = '#8a94b8'; ctx.font = '20px sans-serif';
+  ctx.fillText('rules learned', 100, 425); ctx.fillText('evolution rounds', 380, 425);
+  c.toBlob(function(b){ const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'agent-growth-report.png'; a.click(); });
 }
 const I18N = { zh: { rules:'学会的规则', verified:'经真实检查验证', usage:'规则被使用次数', rounds:'进化轮次', curve:'规则增长曲线', health:'规则库健康度', stale:'陈旧 / 已淘汰 / 已合并', tags:'agent 学到了什么', used:'最常被使用的规则', timeline:'进化时间线' }, en: { rules:'Rules learned', verified:'Verified by real checks', usage:'Times rules used', rounds:'Evolution rounds', curve:'Rule growth over time', health:'Rule library health', stale:'Stale / retired / merged', tags:'What the agent learned about', used:'Most-used rules', timeline:'Evolution timeline' } };
 let zh = false;
