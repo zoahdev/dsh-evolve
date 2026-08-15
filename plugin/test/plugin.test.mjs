@@ -19,11 +19,11 @@ function makeCtx() {
   }
 }
 
-test('plugin registers evolve_learn, evolve_apply and evolve_touch', () => {
+test('plugin registers all four evolve tools', () => {
   const ctx = makeCtx()
   plugin.apply(ctx)
   const names = ctx.registered.map((t) => t.name).sort()
-  assert.deepEqual(names, ['evolve_apply', 'evolve_learn', 'evolve_touch'])
+  assert.deepEqual(names, ['evolve_apply', 'evolve_learn', 'evolve_recall', 'evolve_touch'])
 })
 
 test('evolve_learn extracts from a failure log into the profile store', async () => {
@@ -115,6 +115,31 @@ test('evolve_touch increments usageCount', async () => {
     const entries = readFileSync(learned.file, 'utf8').trim().split('\n').map(JSON.parse)
     assert.equal(entries[0].usageCount, 1)
     assert.ok(entries[0].lastUsedAt)
+  } finally {
+    if (oldHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = oldHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('evolve_recall returns the most relevant rules', async () => {
+  const home = mkdtempSync(path.join(tmpdir(), 'dsh-evolve-recall-'))
+  const oldHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = makeCtx()
+    plugin.apply(ctx)
+    const learn = ctx.registered.find((t) => t.name === 'evolve_learn')
+    const recall = ctx.registered.find((t) => t.name === 'evolve_recall')
+    await learn.execute({
+      task: 't',
+      experience: '- Never rely on /bin/bash on Windows; probe Git Bash first.',
+      profile: 'web',
+    }, { signal: new AbortController().signal })
+    const result = await recall.execute({ profile: 'web', query: 'windows bash', limit: 3 }, { signal: new AbortController().signal })
+    assert.equal(result.total, 1)
+    assert.equal(result.results[0].id, 'EXP-001')
+    assert.match(result.results[0].rule, /bash/)
   } finally {
     if (oldHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = oldHome
