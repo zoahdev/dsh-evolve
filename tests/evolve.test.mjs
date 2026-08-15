@@ -24,6 +24,8 @@ import {
   recallRules,
   parseEvolutionLog,
   renderGrowthDashboard,
+  renderBadge,
+  badgeTier,
 } from '../scripts/dsh-evolve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -286,4 +288,36 @@ test('renderGrowthDashboard produces a self-contained report', () => {
   assert.match(html, /Times rules used/)
   assert.match(html, /Download PNG/)
   assert.match(html, /function downloadPng/)
+})
+
+test('badgeTier maps verified counts to tiers and colors', () => {
+  assert.equal(badgeTier(0).tier, 'starting')
+  assert.equal(badgeTier(1).tier, 'learning')
+  assert.equal(badgeTier(5).tier, 'building')
+  assert.equal(badgeTier(10).tier, 'growing')
+  assert.equal(badgeTier(20).tier, 'legend')
+  assert.equal(badgeTier(20).color, '#f4c542')
+})
+
+test('renderBadge emits a shields-style SVG with verified counts', () => {
+  const entries = [
+    { id: 'a', verified: true },
+    { id: 'b', verified: true },
+    { id: 'c', verified: false },
+  ]
+  const svg = renderBadge(entries)
+  assert.match(svg, /agent rules/)
+  assert.match(svg, /2 verified · 3 rules/)
+  assert.match(svg, /#4f9cf9/)
+  assert.match(svg, /<svg /)
+})
+
+test('renderBadge appends rounds when evolution history is provided', () => {
+  const entries = [
+    { id: 'a', verified: true },
+    { id: 'b', verified: false },
+  ]
+  const rounds = [{ round: 1 }, { round: 2 }]
+  const svg = renderBadge(entries, rounds)
+  assert.match(svg, /1 verified · 2 rules · 2 rounds/)
 })
