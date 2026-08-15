@@ -1,13 +1,13 @@
-# dsh-evolve
+# dsh-rule-evolve
 
 **Verification-driven self-evolution loop for DeepSeek Harness.**
 
-> Naming note: another community project ([william-jin-cmu/dsh-evolve](https://github.com/william-jin-cmu/dsh-evolve))
-> uses the same name for in-session plugin hot-mounting. Different focus:
+> Renamed from `dsh-evolve` (old URL redirects). Reason: another community
+> project ([william-jin-cmu/dsh-evolve](https://github.com/william-jin-cmu/dsh-evolve))
+> already uses that name for in-session plugin hot-mounting. Different focus:
 > that project evolves which plugins are mounted; this project evolves which
-> **rules** are trusted, with verification gates. We are tracking a rename to
-> `dsh-rule-evolve` to avoid confusion; until then, in the dsh-subscribe
-> registry this project is listed as `dsh-evolve (zoahdev)`.
+> **rules** are trusted, with verification gates. The CLI command stays
+> `dsh-evolve` for compatibility (`dsh-rule-evolve` is also available).
 
 Agents keep repeating the same expensive lessons: a crash fixed last week gets
 re-debugged today, a Windows quirk gets rediscovered, an install trap gets
