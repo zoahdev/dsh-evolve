@@ -51,7 +51,7 @@ try {
   const registered = []
   plugin.apply({ tools: { register: (t) => { registered.push(t); return () => {} } } })
   const names = registered.map((t) => t.name).sort()
-  if (JSON.stringify(names) !== JSON.stringify(['evolve_apply', 'evolve_learn', 'evolve_touch'])) {
+  if (JSON.stringify(names) !== JSON.stringify(['evolve_apply', 'evolve_learn', 'evolve_recall', 'evolve_touch'])) {
     throw new Error(`unexpected tools: ${names.join(', ')}`)
   }
   const exec = { signal: new AbortController().signal }
