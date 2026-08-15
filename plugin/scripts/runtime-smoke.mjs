@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-rule-evolve-0.9.1.tgz'))
+const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-rule-evolve-0.10.0.tgz'))
 if (!existsSync(tgz)) {
   console.error(`[runtime-smoke] missing tarball: ${tgz}`)
   process.exit(1)
