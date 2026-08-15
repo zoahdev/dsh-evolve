@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-rule-evolve-0.10.1.tgz'))
+const tgz = path.resolve(process.argv[2] ?? path.join(root, 'dsh-rule-evolve-0.10.2.tgz'))
 if (!existsSync(tgz)) {
   console.error(`[runtime-smoke] missing tarball: ${tgz}`)
   process.exit(1)
@@ -51,7 +51,7 @@ try {
   const registered = []
   plugin.apply({ tools: { register: (t) => { registered.push(t); return () => {} } } })
   const names = registered.map((t) => t.name).sort()
-  if (JSON.stringify(names) !== JSON.stringify(['evolve_apply', 'evolve_learn', 'evolve_recall', 'evolve_touch'])) {
+  if (JSON.stringify(names) !== JSON.stringify(['evolve_apply', 'evolve_learn', 'evolve_recall', 'evolve_report', 'evolve_touch'])) {
     throw new Error(`unexpected tools: ${names.join(', ')}`)
   }
   const exec = { signal: new AbortController().signal }
