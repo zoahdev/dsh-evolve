@@ -22,6 +22,7 @@ import {
   mergeRules,
   profileAgentsPath,
   profileDataPath,
+  recallRules,
 } from './core.js'
 
 export const name = 'dsh-rule-evolve'
@@ -219,6 +220,46 @@ function createTools() {
         return { matched: matched.length, updated: matched.length, profile }
       },
       presentCall: (args) => ({ card: 'generic', title: `Evolve touch (${args.profile ?? 'web'})`, kind: 'other', rawInput: args }),
+    }),
+
+    defineTool({
+      name: 'evolve_recall',
+      description:
+        'Retrieve the most relevant rules from the profile experience store for a query '
+        + '(zero-dependency BM25-lite; verified and frequently used rules rank higher). '
+        + 'Use this before applying lessons, or when you need the library to remind you how to proceed.',
+      parameters: {
+        profile: { type: 'string', description: 'dsh profile name (default: web)' },
+        query: { type: 'string', description: 'Free-text query (required)' },
+        limit: { type: 'integer', description: 'Max results, 1-50 (default 5)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            total: { type: 'integer', required: true },
+            profile: { type: 'string', required: true },
+            results: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          },
+        },
+        render: (args, value) => [{
+          type: 'text',
+          text: `${value.total} rule(s) recalled for "${args.query ?? ''}":\n`
+            + value.results.map((r) => `- [${r.score.toFixed(2)}] ${r.id} ${r.verified ? '✅' : '○'} ${r.usageCount}x — ${r.rule}`).join('\n'),
+        }],
+      },
+      async execute(args) {
+        const profile = /^[A-Za-z0-9_-]+$/.test(args.profile ?? '') ? args.profile : 'web'
+        const query = String(args.query ?? '')
+        if (query.trim() === '') return { total: 0, profile, results: [] }
+        const file = profileDataPath(profile)
+        const entries = loadEntries(file)
+        const limit = typeof args.limit === 'number' ? args.limit : 5
+        const results = recallRules(entries, query, limit)
+        return { total: results.length, profile, results }
+      },
+      presentCall: (args) => ({ card: 'generic', title: `Evolve recall: ${args.query ?? ''}`, kind: 'other', rawInput: args }),
     }),
   ]
 }
