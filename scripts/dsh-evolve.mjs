@@ -191,6 +191,71 @@ export function renderReadiness(report) {
   return lines.join('\n')
 }
 
+/** Heuristic health score for one rule. Higher = more trustworthy/useful. */
+export function scoreRule(entry, now = Date.now()) {
+  if (entry.retired === true || entry.merged === true) return 0
+  const verifiedCount = entry.verifiedCount ?? (entry.verified === true ? 1 : 0)
+  const usageCount = entry.usageCount ?? 0
+  const verifiedNow = entry.verified === true ? 2 : 0
+  let score = verifiedCount * 2 + usageCount + verifiedNow
+  const added = entry.addedAt ? Date.parse(entry.addedAt) : NaN
+  if (Number.isFinite(added)) {
+    const ageDays = (now - added) / 86_400_000
+    if (ageDays > 7 && verifiedCount === 0 && entry.verified !== true) score -= 5
+  }
+  return Math.max(0, score)
+}
+
+/** Classify every rule: active / stale / retired / merged. */
+export function ruleLifecycle(entries, minScore = 3) {
+  const scores = new Map(entries.map((e) => [e.id, scoreRule(e)]))
+  return entries.map((e) => {
+    if (e.retired === true) return { ...e, lifecycle: 'retired', score: 0 }
+    if (e.merged === true) return { ...e, lifecycle: 'merged', score: 0 }
+    return { ...e, lifecycle: scores.get(e.id) >= minScore ? 'active' : 'stale', score: scores.get(e.id) }
+  })
+}
+
+/** Soft-prune rules below a score: mark retired (auditable, no deletion). */
+export function pruneRules(entries, minScore, dryRun = false) {
+  const now = new Date().toISOString()
+  const removed = []
+  for (const e of entries) {
+    if (e.retired === true || e.merged === true) continue
+    if (scoreRule(e) < minScore) {
+      if (!dryRun) {
+        e.retired = true
+        e.retiredAt = now
+        e.retiredReason = `score ${scoreRule(e)} < ${minScore}`
+      }
+      removed.push(e.id)
+    }
+  }
+  return removed
+}
+
+/** Merge near-duplicate pairs into the higher-scoring rule (soft merge). */
+export function mergeDuplicateRules(entries, threshold = 0.7, dryRun = false) {
+  const merged = []
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      const a = entries[i]
+      const b = entries[j]
+      if (a.retired === true || a.merged === true || b.retired === true || b.merged === true) continue
+      if (ruleSimilarity(a.rule, b.rule) < threshold) continue
+      const high = scoreRule(a) >= scoreRule(b) ? a : b
+      const low = high === a ? b : a
+      if (!dryRun) {
+        low.merged = true
+        low.mergedInto = high.id
+        low.mergedAt = new Date().toISOString()
+      }
+      merged.push([low.id, high.id])
+    }
+  }
+  return merged
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -547,6 +612,42 @@ if (command === 'tool-verify') {
     console.log('tool-verify: no issues to learn from')
   }
   process.exit(report.ok ? 0 : 1)
+}
+
+if (command === 'score') {
+  const entries = loadEntries(args.experience ?? 'experience.jsonl')
+  const minScore = Number(args['min-score'] ?? 3)
+  const lines = ['# dsh-rule-evolve rule scores', '', '| Rule | Score | Lifecycle | Verified | Source |', '| --- | --- | --- | --- | --- |']
+  for (const e of ruleLifecycle(entries, minScore)) {
+    lines.push(`| ${e.id} | ${e.score} | ${e.lifecycle} | ${e.verified === true ? '✅' : '○'} | ${e.source} |`)
+  }
+  const rendered = lines.join('\n')
+  if (args.out) writeFileSync(args.out, `${rendered}\n`, 'utf8')
+  console.log(rendered)
+  process.exit(0)
+}
+
+if (command === 'prune') {
+  const file = args.experience ?? 'experience.jsonl'
+  const minScore = Number(args['min-score'] ?? 3)
+  const dryRun = args['dry-run'] === true
+  const entries = loadEntries(file)
+  const removed = pruneRules(entries, minScore, dryRun)
+  if (!dryRun) saveEntries(file, entries)
+  console.log(`prune ${dryRun ? '(dry-run) ' : ''}: ${removed.length} rule(s) below score ${minScore} -> ${removed.join(', ') || 'none'}`)
+  process.exit(0)
+}
+
+if (command === 'merge-duplicates') {
+  const file = args.experience ?? 'experience.jsonl'
+  const threshold = Number(args.threshold ?? 0.7)
+  const dryRun = args['dry-run'] === true
+  const entries = loadEntries(file)
+  const merged = mergeDuplicateRules(entries, threshold, dryRun)
+  if (!dryRun) saveEntries(file, entries)
+  console.log(`merge-duplicates ${dryRun ? '(dry-run) ' : ''}: ${merged.length} merge(s)`)
+  for (const [low, high] of merged) console.log(`  ${low} -> ${high}`)
+  process.exit(0)
 }
 
   console.error(`unknown command: ${command} (run 'dsh-evolve help')`)
