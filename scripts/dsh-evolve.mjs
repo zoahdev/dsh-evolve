@@ -271,8 +271,9 @@ export function recallRules(entries, query, limit = 5) {
     const freq = {}
     for (const w of words) {
       freq[w] = (freq[w] ?? 0) + 1
-      df[w] = (df[w] ?? 0) + 1
     }
+    // Document frequency counts each document once per term.
+    for (const w of new Set(words)) df[w] = (df[w] ?? 0) + 1
     return { entry: e, freq }
   })
   const scored = tokenized.map(({ entry, freq }) => {
