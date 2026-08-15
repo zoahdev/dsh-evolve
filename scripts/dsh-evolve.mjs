@@ -154,6 +154,43 @@ export function auditRules(entries, threshold = 0.7) {
   }
 }
 
+/**
+ * Tool-learning step: run a readiness command (default: dsh-plugin-doctor
+ * check), parse its JSON checks when available, render a readiness report,
+ * and append the findings to the experience store so the lesson is learned.
+ */
+export function toolReadiness(verifyCmd, dir) {
+  const parts = verifyCmd.split(/\s+/).map((t) => t.replace(/^"|"$/g, ''))
+  const result = spawnSync(parts[0], parts.slice(1), { encoding: 'utf8', timeout: 300_000 })
+  let checks = null
+  try {
+    const parsed = JSON.parse(result.stdout)
+    if (Array.isArray(parsed.checks)) checks = parsed.checks
+  } catch { /* non-JSON output: fall back to exit code only */ }
+  const ok = result.status === 0
+  return { ok, exitCode: result.status, stdout: result.stdout, stderr: result.stderr, checks, dir }
+}
+
+export function renderReadiness(report) {
+  const lines = [`# Tool readiness report — ${report.dir}`, '']
+  lines.push(`- Generated: ${new Date().toISOString()}`)
+  lines.push(`- Verify exit: ${report.exitCode}`)
+  if (report.checks !== null) {
+    const pass = report.checks.filter((c) => c.status === 'PASS').length
+    const warn = report.checks.filter((c) => c.status === 'WARN').length
+    const fail = report.checks.filter((c) => c.status === 'FAIL').length
+    lines.push(`- Checks: ${pass} pass / ${warn} warn / ${fail} fail`)
+    lines.push('')
+    lines.push('| Check | Status | Detail |')
+    lines.push('| --- | --- | --- |')
+    for (const c of report.checks) {
+      lines.push(`| ${c.name} | ${c.status} | ${String(c.detail ?? '').replace(/\|/g, '\\|').slice(0, 120)} |`)
+    }
+  }
+  lines.push('', `- Overall: ${report.ok ? '**READY ✅**' : '**ISSUES FOUND ❌**'}`)
+  return lines.join('\n')
+}
+
 /** Render entries into an AGENTS.md rules block (appendable). */
 export function renderRules(entries) {
   const lines = []
@@ -473,6 +510,43 @@ if (command === 'audit') {
   if (args.out) writeFileSync(args.out, `${rendered}\n`, 'utf8')
   console.log(rendered)
   process.exit(0)
+}
+
+if (command === 'tool-verify') {
+  const dir = args.dir ?? '.'
+  const out = args.out
+  const file = args.experience ?? 'experience.jsonl'
+  const verifyCmd = args['verify-cmd']
+    ?? `node ${path.join(process.cwd(), '..', 'doctor', 'lib', 'bin.js')} check ${dir} --json`
+  const report = toolReadiness(verifyCmd, dir)
+  const rendered = renderReadiness(report)
+  if (out) writeFileSync(out, `${rendered}\n`, 'utf8')
+  console.log(rendered)
+
+  // Tool-learning: failures/warnings become experience entries.
+  const problemLines = (report.checks ?? [])
+    .filter((c) => c.status === 'FAIL' || c.status === 'WARN')
+    .map((c) => `ERROR: ${c.name}: ${c.detail}`)
+  if (problemLines.length > 0) {
+    const fresh = extractFromLog(
+      problemLines.join('\n'),
+      `make ${dir} ready`,
+      `tool-verify:${dir}`,
+      'fix the failing check before shipping',
+    )
+    const existing = loadEntries(file)
+    const seen = new Set(existing.map((e) => hash(e.rule)))
+    const added = fresh.filter((e) => !seen.has(hash(e.rule)))
+    for (const e of added) {
+      e.verified = report.ok
+      e.lastVerifiedAt = new Date().toISOString()
+    }
+    saveEntries(file, [...existing, ...added])
+    console.log(`tool-verify: learned ${added.length} rule(s) -> ${file} (verified: ${report.ok})`)
+  } else {
+    console.log('tool-verify: no issues to learn from')
+  }
+  process.exit(report.ok ? 0 : 1)
 }
 
   console.error(`unknown command: ${command} (run 'dsh-evolve help')`)
