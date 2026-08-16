@@ -209,3 +209,71 @@ rule evolution loop.
 ## License
 
 MIT
+---
+
+# 中文说明
+
+**面向 DeepSeek Harness 的、带验证的智能体自我进化循环。**
+
+> 项目已从 `dsh-evolve` 改名 `dsh-rule-evolve`（旧地址会跳转）。CLI 命令仍保留 `dsh-evolve` 以兼容。
+
+智能体会反复踩同一个坑：上周修好的崩溃这周又 debug 一遍，Windows 的怪癖被重新发现，安装陷阱被再次触发。这个项目把这个循环变成一条可追踪的流水线：
+
+```text
+经验（markdown）→ learn → 规则（AGENTS.md）→ verify（真实检查）
+```
+
+每条规则都带着来源和最近一次验证结果——进化全程可审计，没有经过检查的东西永远不会被「学到」。
+
+## 快速上手
+
+```sh
+node scripts/dsh-evolve.mjs learn --from docs/troubleshooting.md --out experience.jsonl
+node scripts/dsh-evolve.mjs rules --experience experience.jsonl --out AGENTS.md
+node scripts/dsh-evolve.mjs verify --experience experience.jsonl --dir ./my-plugin
+```
+
+`verify` 会跑真实的检查流水线（默认是 dsh-plugin-doctor `check <dir>`，可用 `--cmd` 覆盖），并把每条经验盖上 `verified: true/false`。
+
+## 核心命令一览
+
+| 命令 | 作用 |
+| --- | --- |
+| `learn` | 从 markdown 经验文档提取规则 |
+| `rules` | 把规则库渲染成 AGENTS.md |
+| `verify` | 用真实检查验证每条规则 |
+| `reflect` | 对完成的任务/复盘做反思 |
+| `evolve` | 验证规则 + 装进 dsh profile + 追加进化日志 |
+| `extract` | 从失败日志自动提取「当 X 出错时做 Y」的条件规则 |
+| `audit` | 规则库健康报告（去重、来源分布、近重复）|
+| `tool-verify` | 「agent 写了个工具 → 它能用吗？」就绪门禁 |
+| `score` / `prune` / `merge-duplicates` | 规则打分、软淘汰、合并近重复 |
+| `touch` | 记录规则被使用（跨会话强化）|
+| `recall` | 零依赖 BM25 检索规则库 |
+| `dash` | 生成可分享的 Agent 成长报告 HTML（双语）|
+| `badge` | 把规则库生成 README 用 SVG 徽章 |
+| `loop` | 一条命令跑完整循环 |
+
+## 规则怎么进入 agent
+
+生成的是纯文本 AGENTS.md，放到仓库根目录或 dsh profile 规则里，以后每个会话都能看到：
+
+```markdown
+## Self-evolution rules
+- [EXP-001] Never run recursive directory listings through node_modules; prefer Glob/Grep. _(source: docs/troubleshooting.md · ✅ verified)_
+```
+
+## 设计要点
+
+- 零运行时依赖，Node ≥ 18。
+- 经验条目是 JSONL：`{ id, rule, source, tags, addedAt, verified, lastVerifiedAt }`。
+- 按规则哈希去重；标签是启发式推断（install/crash/windows/test/memory/security/performance）。
+- 验证步骤可插拔：用 `--cmd` 指向任意「成功即退出 0」的命令。
+
+## 为什么契合 dsh
+
+官方讨论 #1881 提出了三层持久记忆；其中第一层是 Git 托管的 Markdown 规则。dsh-rule-evolve 就是这一层的**生产和验证半边**——规则从哪来，以及它们如何保持诚实。生态里已经有很多记忆引擎，但还没有一个带验证驱动的规则进化循环。
+
+## 许可
+
+MIT
